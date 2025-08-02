@@ -3,191 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>FlyHigh™ Dispatch</title>
-  <script src="https://cdn.tailwindcss.com">
-// === Alternate Global Toggle ===
-function toggleAllAlternates() {
-  const toAlt = Object.values(toggleAlt).some(v => !v);
-  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
-  buildDashboard();
-}
-
-// Modify updateTile to respect destination/alternate toggle
-const _orig_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-  const taf = highlightTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis);
-
-  container.innerHTML = `
-    <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
-    <div class="text-sm text-center mb-2">Destination: ${flight.arricao} | Alternate: ${flight.alticao}
-      <span class="block text-xs text-yellow-400">${useAlt ? '(Using Alternate)' : '(Using Destination)'}</span>
-    </div>
-    <div class="text-lg flex justify-around mt-2 mb-2">
-      <div>STD: ${shortTime(flight.std)}</div>
-      <div>STA: ${shortTime(flight.sta)}</div>
-      <div>ETA: ${shortTime(flight.eta)}</div>
-    </div>
-    <div class="w-full bg-gray-700 rounded h-2 mt-1">
-      <div class="bg-green-500 h-2 rounded" style="width:${calculateProgress(flight.std, flight.eta)}%"></div>
-    </div>
-    <div class="flex justify-between text-sm mt-1 font-bold">
-      <div>${flight.depicao}</div>
-      <div>${flight.arricao}</div>
-    </div>
-    <div class="flex justify-center mt-2">
-      <button onclick="toggleAlt['${flight.callsign}']=!toggleAlt['${flight.callsign}']; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))" class="bg-purple-600 px-2 py-1 text-xs rounded text-white hover:bg-purple-700">Toggle Alternate</button>
-    </div>
-    ${showWeather ? `
-      <div class="flex gap-3 items-center mt-2 text-xs">
-        <label>Ceil: <input type="number" value="${minima[flight.callsign].ceiling}" class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${flight.callsign}'].ceiling=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))"/></label>
-        <label>Vis: <input type="number" step="0.1" value="${minima[flight.callsign].vis}" class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${flight.callsign}'].vis=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))"/></label>
-      </div>
-      ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
-      ${taf.html ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
-      <div class="mt-2 text-sm">${taf.below ? '<span class="text-red-400 font-bold">🚨 Below minima</span>' : '<span class="text-green-400 font-bold">✅ Above minima</span>'}</div>
-    ` : ""}
-  `;
-}
-
-
-// === GLOBAL TOGGLE SWITCH ===
-function setGlobalToggle(toAlt) {
-  document.getElementById("globalDest").style.background = toAlt ? "#374151" : "#2563eb";
-  document.getElementById("globalDest").style.color = toAlt ? "#d1d5db" : "#fff";
-  document.getElementById("globalAlt").style.background = toAlt ? "#2563eb" : "#374151";
-  document.getElementById("globalAlt").style.color = toAlt ? "#fff" : "#d1d5db";
-
-  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
-  buildDashboard();
-}
-
-// === WRAP updateTile: ETA minima, raw TAF in dashboard, toggle UI ===
-const _original_updateTile_working = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_working) {
-  updateTile = async function(flight, container) {
-    await _original_updateTile_working(flight, container);
-
-    minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-    toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
-    const useAlt = toggleAlt[flight.callsign];
-    const icao = useAlt ? flight.alticao : flight.arricao;
-
-    const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-
-    // ETA-based minima check
-    const eta = new Date(flight.eta);
-    const tafLines = tafRaw.split("\n");
-    let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
-
-    for (const line of tafLines) {
-      const p = parseLine(line);
-      if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
-        etaCondition = p;
-      }
-    }
-
-    const visOk = etaCondition.isGreater ? true : (etaCondition.visMiles >= minima[flight.callsign].vis);
-    const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
-    const belowMinima = !(visOk && ceilOk);
-
-    // Border
-    container.classList.add("border");
-    container.classList.remove("border-red-600", "border-green-600");
-    container.classList.add(belowMinima ? "border-red-600" : "border-green-600");
-
-    // ICAO label
-    const header = container.querySelector(".text-sm.text-center.mb-2");
-    if (header) header.innerHTML = `Weather: <span class="font-bold">${icao}</span>`;
-
-    // Toggle switch UI
-    const toggleArea = container.querySelector(".flex.justify-center.mt-2");
-    if (toggleArea) {
-      toggleArea.innerHTML = `
-        <div class="toggle-container" style="display:flex;background:#374151;border-radius:9999px;overflow:hidden;width:180px;">
-          <div class="toggle-btn ${!useAlt ? 'active' : ''}" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;${!useAlt ? 'background:#2563eb;color:#fff;' : 'color:#d1d5db;'}"
-            onclick="toggleAlt['${flight.callsign}']=false; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))">Destination</div>
-          <div class="toggle-btn ${useAlt ? 'active' : ''}" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;${useAlt ? 'background:#2563eb;color:#fff;' : 'color:#d1d5db;'}"
-            onclick="toggleAlt['${flight.callsign}']=true; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))">Alternate</div>
-        </div>
-      `;
-    }
-
-    // Raw TAF in dashboard
-    const tafSection = container.querySelector(".mt-2.text-xs");
-    if (tafSection) {
-      const tafDivs = tafSection.querySelectorAll("div");
-      tafDivs.forEach(div => {
-        if (div.innerText.startsWith("TAF:")) {
-          div.innerHTML = `<strong>TAF:</strong><br>${tafRaw.replace(/\n/g, "<br>")}`;
-        }
-      });
-
-      let status = tafSection.querySelector(".mt-2.text-sm");
-      if (!status) {
-        status = document.createElement("div");
-        status.className = "mt-2 text-sm";
-        tafSection.appendChild(status);
-      }
-      status.innerHTML = belowMinima
-        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
-        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
-    }
-  }
-}
-
-
-// === Ensure ETA minima status in dashboard ===
-const _original_updateTile_highlight = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_highlight) {
-  updateTile = async function(flight, container) {
-    await _original_updateTile_highlight(flight, container);
-
-    minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-    toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
-
-    const useAlt = toggleAlt[flight.callsign];
-    const icao = useAlt ? flight.alticao : flight.arricao;
-
-    const [tafRaw] = await Promise.all([fetchTAF(icao)]);
-
-    const eta = new Date(flight.eta);
-    const tafLines = tafRaw.split("\n");
-    let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
-
-    for (const line of tafLines) {
-      const p = parseLine(line);
-      if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
-        etaCondition = p;
-      }
-    }
-
-    const visOk = etaCondition.isGreater ? true : (etaCondition.visMiles >= minima[flight.callsign].vis);
-    const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
-    const belowMinima = !(visOk && ceilOk);
-
-    // Add/update status label
-    const tafSection = container.querySelector(".mt-2.text-xs");
-    if (tafSection) {
-      let status = tafSection.querySelector(".mt-2.text-sm");
-      if (!status) {
-        status = document.createElement("div");
-        status.className = "mt-2 text-sm";
-        tafSection.appendChild(status);
-      }
-      status.innerHTML = belowMinima
-        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
-        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
-    }
-  }
-}
-</script>
-
-
-
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @media (min-width: 1536px) {
       .flight-tile {
@@ -224,11 +40,10 @@ if (_original_updateTile_highlight) {
       <input id="globalVis" type="number" step="0.1" class="bg-gray-700 p-1 rounded w-24 text-center" />
     </label>
     <button onclick="applyGlobalMinima()" class="bg-green-600 px-3 py-1 rounded text-white hover:bg-green-700 text-sm">Apply to All</button>
-    <div class="toggle-container" style="display:flex;background:#374151;border-radius:9999px;overflow:hidden;width:180px;">
-      <div id="globalDest" class="toggle-btn active" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;color:#fff;background:#2563eb;" onclick="setGlobalToggle(false)">Destination</div>
-      <div id="globalAlt" class="toggle-btn" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;color:#d1d5db;" onclick="setGlobalToggle(true)">Alternate</div>
+    <div class="inline-flex bg-gray-700 rounded-full p-1">
+      <span id="globalDestSpan" onclick="setGlobal(false)" class="cursor-pointer px-2 py-1 rounded-full font-medium bg-purple-600 text-white">Destination</span>
+      <span id="globalAltSpan" onclick="setGlobal(true)" class="cursor-pointer px-2 py-1 rounded-full font-medium text-gray-300">Alternate</span>
     </div>
-    <!-- Removed redundant toggleAltGlobalBtn <button id="toggleAltGlobalBtn" onclick="toggleAllAlternates()" class="bg-purple-600 px-3 py-1 rounded text-white hover:bg-purple-700 text-sm">Toggle All to Alternate</button> -->
     <button id="toggleWeatherBtn"
       onclick="toggleWeatherView()"
       class="bg-yellow-600 px-3 py-1 rounded text-white hover:bg-yellow-700 text-sm">
@@ -270,6 +85,7 @@ const weatherCache = {};
 const TAF_CACHE_MS = 600000;
 const METAR_CACHE_MS = 60000;
 const minima = {}, flights = [], toggleAlt = {};
+let globalAlternate = false;
 let showWeather = true;
 let weatherICAOs = JSON.parse(localStorage.getItem("weatherICAOs") || "[]");
 
@@ -351,8 +167,12 @@ function parseLine(line) {
   if (cloud) ceiling = parseInt(cloud[2]) * 100;
   const vis = line.match(/(P?\d{1,2})SM/);
   if (vis) {
-    if (vis[1].startsWith("P")) { visMiles = parseInt(vis[1].slice(1)); isGreater = true; }
-    else visMiles = parseInt(vis[1]);
+    if (vis[1].startsWith("P")) { 
+      visMiles = parseInt(vis[1].slice(1)); 
+      isGreater = true; 
+    } else {
+      visMiles = parseInt(vis[1]);
+    }
   }
   return { ceiling, visMiles, isGreater };
 }
@@ -367,6 +187,152 @@ function highlightTAF(raw, minC, minV) {
     return `<div class="${!(visOk && ceilOk) ? "text-red-400" : ""}">${line}</div>`;
   }).join("");
   return { html, below };
+}
+
+function processTAF(raw, minC, minV, eta) {
+  let below = false;
+  if (!raw) return { below };
+  // parse validity period
+  let valid = raw.match(/\b\d{4}\/\d{4}\b/);
+  let startDay, startHour, endDay, endHour;
+  if (valid) {
+    startDay = parseInt(valid[0].substr(0,2));
+    startHour = parseInt(valid[0].substr(2,2));
+    endDay = parseInt(valid[0].substr(5,2));
+    endHour = parseInt(valid[0].substr(7,2));
+  }
+  const etaDate = new Date(eta);
+  // Helper to get Date for given day/hour relative to ETA's month/year
+  function getDate(day, hour, minute=0) {
+    let d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
+    // If wrapping to next month
+    if (startDay && endDay && endDay < startDay && day <= endDay) {
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+    return d;
+  }
+  let validityEnd = endDay ? getDate(endDay, endHour) : null;
+  // Split raw into segments
+  let segments = [];
+  raw.split("\n").forEach(line => {
+    line = line.trim();
+    if (!line) return;
+    // remove the header portion from first line if present
+    if (line.startsWith("TAF")) {
+      const idx = line.search(/\d{4}\/\d{4}/);
+      if (idx >= 0) {
+        line = line.substring(idx + 9).trim(); // 4+1+4 digits + space
+      }
+    }
+    // split line by FM/TEMPO/BECMG/PROB tokens if multiple in one line
+    line.split(/(?=FM\d{6})|(?=TEMPO)|(?=BECMG)|(?=PROB\d{2})/).forEach(seg => {
+      seg = seg.trim();
+      if (seg) segments.push(seg);
+    });
+  });
+  let prevSegments = [];
+  // parse segments
+  segments.forEach(seg => {
+    if (seg.startsWith("TEMPO") || seg.startsWith("PROB")) {
+      // parse timeframe
+      const m = seg.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const segStart = getDate(sDay, sHour);
+      const segEnd = getDate(eDay, eHour);
+      // conditions after timeframe
+      const condIndex = seg.indexOf(m[0]) + m[0].length;
+      const condStr = seg.substring(condIndex).trim();
+      const p = parseLine(condStr);
+      const visOk = p.isGreater ? true : (p.visMiles >= minV);
+      const ceilOk = p.ceiling >= minC;
+      if (!(visOk && ceilOk) && etaDate >= segStart && etaDate <= segEnd) {
+        below = true;
+      }
+    } else if (seg.startsWith("BECMG")) {
+      // parse gradual change timeframe
+      const m = seg.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const changeStart = getDate(sDay, sHour);
+      const changeEnd = getDate(eDay, eHour);
+      // conditions after timeframe
+      const condIndex = seg.indexOf(m[0]) + m[0].length;
+      const condStr = seg.substring(condIndex).trim();
+      const p = parseLine(condStr);
+      const visOk = p.isGreater ? true : (p.visMiles >= minV);
+      const ceilOk = p.ceiling >= minC;
+      // if ETA is at or after start of change and final conditions are below minima
+      if (!(visOk && ceilOk) && etaDate >= changeStart) {
+        below = true;
+      }
+    } else {
+      // prevailing (initial or FM)
+      let start = null;
+      let condStr = seg;
+      if (seg.startsWith("FM")) {
+        const m = seg.match(/FM(\d{2})(\d{2})(\d{2})/);
+        if (m) {
+          const d = parseInt(m[1]), h = parseInt(m[2]), mi = parseInt(m[3]);
+          start = getDate(d, h, mi);
+          condStr = seg.substring(8).trim();
+        }
+      } else {
+        // initial segment
+        start = valid ? getDate(startDay, startHour) : null;
+      }
+      prevSegments.push({ start, condStr });
+    }
+  });
+  // sort prevailing segments by start time
+  prevSegments.sort((a,b) => (a.start || etaDate) - (b.start || etaDate));
+  // assign end times for prevailing segments
+  for (let i = 0; i < prevSegments.length; i++) {
+    if (i < prevSegments.length - 1) {
+      prevSegments[i].end = prevSegments[i+1].start;
+    } else {
+      prevSegments[i].end = validityEnd;
+    }
+  }
+  // find prevailing segment at ETA if not already below
+  if (!below) {
+    const seg = prevSegments.find(s => s.start && s.end && etaDate >= s.start && (!s.end || etaDate < s.end));
+    if (seg) {
+      const p = parseLine(seg.condStr);
+      const visOk = p.isGreater ? true : (p.visMiles >= minV);
+      const ceilOk = p.ceiling >= minC;
+      if (!(visOk && ceilOk)) below = true;
+    }
+  }
+  return { below };
+}
+
+function setGlobal(value) {
+  globalAlternate = value;
+  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = value);
+  buildDashboard();
+  const destSpan = document.getElementById("globalDestSpan");
+  const altSpan = document.getElementById("globalAltSpan");
+  if (destSpan && altSpan) {
+    if (value) {
+      destSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium text-gray-300";
+      altSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium bg-purple-600 text-white";
+    } else {
+      destSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium bg-purple-600 text-white";
+      altSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium text-gray-300";
+    }
+  }
+}
+
+function setAlternate(callsign, value) {
+  toggleAlt[callsign] = value;
+  const flight = flights.find(f => f.callsign === callsign);
+  const tile = document.getElementById(`tile-${callsign}`);
+  if (flight && tile) {
+    updateTile(flight, tile);
+  }
 }
 
 function showPage(page) {
@@ -442,25 +408,25 @@ function buildWeatherTiles() {
 }
 
 async function buildDashboard() {
-  const now=new Date(), completed=[], enroute=[], scheduled=[];
-  flights.forEach(f=>{
-    minima[f.callsign]=minima[f.callsign]||{ceiling:500,vis:1};
-    toggleAlt[f.callsign]=toggleAlt[f.callsign]!==undefined?toggleAlt[f.callsign]:false;
-    const start=new Date(f.std), end=new Date(f.eta);
-    if(now>end) completed.push(f);
-    else if(start<=now && now<=end) enroute.push(f);
-    else if(start>now && (start-now)<=12*3600000) scheduled.push(f);
+  const now = new Date(), completed = [], enroute = [], scheduled = [];
+  flights.forEach(f => {
+    minima[f.callsign] = minima[f.callsign] || { ceiling: 500, vis: 1 };
+    toggleAlt[f.callsign] = toggleAlt[f.callsign] !== undefined ? toggleAlt[f.callsign] : false;
+    const start = new Date(f.std), end = new Date(f.eta);
+    if (now > end) completed.push(f);
+    else if (start <= now && now <= end) enroute.push(f);
+    else if (start > now && (start - now) <= 12*3600000) scheduled.push(f);
   });
-  completed.sort((a,b)=>new Date(b.eta)-new Date(a.eta));
-  enroute.sort((a,b)=>new Date(a.eta)-new Date(b.eta));
-  scheduled.sort((a,b)=>new Date(a.std)-new Date(b.std));
-  const activeContainer=document.getElementById("activeFlights");
-  const completedContainer=document.getElementById("completedFlights");
-  activeContainer.innerHTML=completedContainer.innerHTML="";
-  completed.slice(0,10).forEach(f=>{
-    const div=document.createElement("div");
-    div.className="flight-tile bg-gray-800 rounded-lg shadow p-3 border border-gray-700";
-    div.innerHTML=`<div class="text-xl font-bold text-center mb-1">${f.callsign}</div>
+  completed.sort((a,b) => new Date(b.eta) - new Date(a.eta));
+  enroute.sort((a,b) => new Date(a.eta) - new Date(b.eta));
+  scheduled.sort((a,b) => new Date(a.std) - new Date(b.std));
+  const activeContainer = document.getElementById("activeFlights");
+  const completedContainer = document.getElementById("completedFlights");
+  activeContainer.innerHTML = completedContainer.innerHTML = "";
+  completed.slice(0,10).forEach(f => {
+    const div = document.createElement("div");
+    div.className = "flight-tile bg-gray-800 rounded-lg shadow p-3 border border-gray-700";
+    div.innerHTML = `<div class="text-xl font-bold text-center mb-1">${f.callsign}</div>
       <div class="flex justify-around text-sm mb-1"><div>STD: ${shortTime(f.std)}</div>
       <div>STA: ${shortTime(f.sta)}</div><div>ETA: ${shortTime(f.eta)}</div></div>
       <div class="w-full bg-gray-700 rounded h-1 mt-1"><div class="bg-green-500 h-1 rounded w-full"></div></div>
@@ -469,32 +435,43 @@ async function buildDashboard() {
       <div class="text-xs mt-1 font-bold">Alternate: ${f.alticao}</div>`;
     completedContainer.appendChild(div);
   });
-  [...enroute,...scheduled].forEach(f=>{
-    const div=document.createElement("div");
-    div.className="flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700 hover:scale-105 transition-transform duration-300";
+  [...enroute, ...scheduled].forEach(f => {
+    const div = document.createElement("div");
+    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700 hover:scale-105 transition-transform duration-300";
+    div.id = `tile-${f.callsign}`;
     activeContainer.appendChild(div);
     updateTile(f, div);
   });
-  document.getElementById("lastUpdated").textContent=new Date().toUTCString().slice(17,25);
+  document.getElementById("lastUpdated").textContent = new Date().toUTCString().slice(17,25);
 }
 
 async function updateTile(flight, container) {
   const useAlt = toggleAlt[flight.callsign];
   const icao = useAlt ? flight.alticao : flight.arricao;
-  let tafRaw="", metarRaw="", taf={html:"",below:false};
+  let tafRaw = "", metarRaw = "";
+  let below = false;
   if (icao) {
     [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-    taf = highlightTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis);
+    if (tafRaw) {
+      const result = processTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis, flight.eta);
+      below = result.below;
+    }
   }
-  const status = taf.html
-    ? (taf.below 
+  const status = tafRaw
+    ? (below 
         ? `<span class="text-red-400 font-bold">🚨 Below minima</span>`
         : `<span class="text-green-400 font-bold">✅ Above minima</span>`)
     : "";
 
   container.innerHTML = `
     <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
-    <div class="text-sm text-center mb-2">Destination: ${flight.arricao} | Alternate: ${flight.alticao}</div>
+    <div class="flex justify-between items-center text-sm mb-2">
+        <span>Weather: ${useAlt ? flight.alticao : flight.arricao}</span>
+        <div class="inline-flex bg-gray-700 rounded-full p-1">
+          <span onclick="setAlternate('${flight.callsign}', false)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${!useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Destination</span>
+          <span onclick="setAlternate('${flight.callsign}', true)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Alternate</span>
+        </div>
+      </div>
     <div class="text-lg flex justify-around mt-2 mb-2">
       <div>STD: ${shortTime(flight.std)}</div>
       <div>STA: ${shortTime(flight.sta)}</div>
@@ -517,14 +494,14 @@ async function updateTile(flight, container) {
         onchange="minima['${flight.callsign}'].vis=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.parentNode.parentNode.parentNode)"/></label>
     </div>
     ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
-    ${taf.html ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
+    ${tafRaw ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${tafRaw.split("\n").join("<br>")}</div>` : ""}
     <div class="mt-2 text-sm">${status}</div>
     ` : ""}
   `;
 
   container.classList.remove("border-gray-700", "border-red-500", "border-green-500");
-  if (taf.html) {
-    container.classList.add(taf.below ? "border-red-500" : "border-green-500");
+  if (tafRaw) {
+    container.classList.add(below ? "border-red-500" : "border-green-500");
   } else {
     container.classList.add("border-gray-700");
   }
@@ -545,190 +522,6 @@ setInterval(() => {
   document.getElementById("clock-local").textContent = now.toLocaleTimeString() + " Local";
   document.getElementById("clock-utc").textContent = now.toUTCString().slice(17, 25) + " UTC";
 }, 1000);
-
-// === Alternate Global Toggle ===
-function toggleAllAlternates() {
-  const toAlt = Object.values(toggleAlt).some(v => !v);
-  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
-  buildDashboard();
-}
-
-// Modify updateTile to respect destination/alternate toggle
-const _orig_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-  const taf = highlightTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis);
-
-  container.innerHTML = `
-    <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
-    <div class="text-sm text-center mb-2">Destination: ${flight.arricao} | Alternate: ${flight.alticao}
-      <span class="block text-xs text-yellow-400">${useAlt ? '(Using Alternate)' : '(Using Destination)'}</span>
-    </div>
-    <div class="text-lg flex justify-around mt-2 mb-2">
-      <div>STD: ${shortTime(flight.std)}</div>
-      <div>STA: ${shortTime(flight.sta)}</div>
-      <div>ETA: ${shortTime(flight.eta)}</div>
-    </div>
-    <div class="w-full bg-gray-700 rounded h-2 mt-1">
-      <div class="bg-green-500 h-2 rounded" style="width:${calculateProgress(flight.std, flight.eta)}%"></div>
-    </div>
-    <div class="flex justify-between text-sm mt-1 font-bold">
-      <div>${flight.depicao}</div>
-      <div>${flight.arricao}</div>
-    </div>
-    <div class="flex justify-center mt-2">
-      <button onclick="toggleAlt['${flight.callsign}']=!toggleAlt['${flight.callsign}']; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))" class="bg-purple-600 px-2 py-1 text-xs rounded text-white hover:bg-purple-700">Toggle Alternate</button>
-    </div>
-    ${showWeather ? `
-      <div class="flex gap-3 items-center mt-2 text-xs">
-        <label>Ceil: <input type="number" value="${minima[flight.callsign].ceiling}" class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${flight.callsign}'].ceiling=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))"/></label>
-        <label>Vis: <input type="number" step="0.1" value="${minima[flight.callsign].vis}" class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${flight.callsign}'].vis=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))"/></label>
-      </div>
-      ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
-      ${taf.html ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
-      <div class="mt-2 text-sm">${taf.below ? '<span class="text-red-400 font-bold">🚨 Below minima</span>' : '<span class="text-green-400 font-bold">✅ Above minima</span>'}</div>
-    ` : ""}
-  `;
-}
-
-
-// === GLOBAL TOGGLE SWITCH ===
-function setGlobalToggle(toAlt) {
-  document.getElementById("globalDest").style.background = toAlt ? "#374151" : "#2563eb";
-  document.getElementById("globalDest").style.color = toAlt ? "#d1d5db" : "#fff";
-  document.getElementById("globalAlt").style.background = toAlt ? "#2563eb" : "#374151";
-  document.getElementById("globalAlt").style.color = toAlt ? "#fff" : "#d1d5db";
-
-  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
-  buildDashboard();
-}
-
-// === WRAP updateTile: ETA minima, raw TAF in dashboard, toggle UI ===
-const _original_updateTile_working = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_working) {
-  updateTile = async function(flight, container) {
-    await _original_updateTile_working(flight, container);
-
-    minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-    toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
-    const useAlt = toggleAlt[flight.callsign];
-    const icao = useAlt ? flight.alticao : flight.arricao;
-
-    const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-
-    // ETA-based minima check
-    const eta = new Date(flight.eta);
-    const tafLines = tafRaw.split("\n");
-    let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
-
-    for (const line of tafLines) {
-      const p = parseLine(line);
-      if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
-        etaCondition = p;
-      }
-    }
-
-    const visOk = etaCondition.isGreater ? true : (etaCondition.visMiles >= minima[flight.callsign].vis);
-    const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
-    const belowMinima = !(visOk && ceilOk);
-
-    // Border
-    container.classList.add("border");
-    container.classList.remove("border-red-600", "border-green-600");
-    container.classList.add(belowMinima ? "border-red-600" : "border-green-600");
-
-    // ICAO label
-    const header = container.querySelector(".text-sm.text-center.mb-2");
-    if (header) header.innerHTML = `Weather: <span class="font-bold">${icao}</span>`;
-
-    // Toggle switch UI
-    const toggleArea = container.querySelector(".flex.justify-center.mt-2");
-    if (toggleArea) {
-      toggleArea.innerHTML = `
-        <div class="toggle-container" style="display:flex;background:#374151;border-radius:9999px;overflow:hidden;width:180px;">
-          <div class="toggle-btn ${!useAlt ? 'active' : ''}" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;${!useAlt ? 'background:#2563eb;color:#fff;' : 'color:#d1d5db;'}"
-            onclick="toggleAlt['${flight.callsign}']=false; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))">Destination</div>
-          <div class="toggle-btn ${useAlt ? 'active' : ''}" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;${useAlt ? 'background:#2563eb;color:#fff;' : 'color:#d1d5db;'}"
-            onclick="toggleAlt['${flight.callsign}']=true; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))">Alternate</div>
-        </div>
-      `;
-    }
-
-    // Raw TAF in dashboard
-    const tafSection = container.querySelector(".mt-2.text-xs");
-    if (tafSection) {
-      const tafDivs = tafSection.querySelectorAll("div");
-      tafDivs.forEach(div => {
-        if (div.innerText.startsWith("TAF:")) {
-          div.innerHTML = `<strong>TAF:</strong><br>${tafRaw.replace(/\n/g, "<br>")}`;
-        }
-      });
-
-      let status = tafSection.querySelector(".mt-2.text-sm");
-      if (!status) {
-        status = document.createElement("div");
-        status.className = "mt-2 text-sm";
-        tafSection.appendChild(status);
-      }
-      status.innerHTML = belowMinima
-        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
-        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
-    }
-  }
-}
-
-
-// === Ensure ETA minima status in dashboard ===
-const _original_updateTile_highlight = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_highlight) {
-  updateTile = async function(flight, container) {
-    await _original_updateTile_highlight(flight, container);
-
-    minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-    toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
-
-    const useAlt = toggleAlt[flight.callsign];
-    const icao = useAlt ? flight.alticao : flight.arricao;
-
-    const [tafRaw] = await Promise.all([fetchTAF(icao)]);
-
-    const eta = new Date(flight.eta);
-    const tafLines = tafRaw.split("\n");
-    let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
-
-    for (const line of tafLines) {
-      const p = parseLine(line);
-      if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
-        etaCondition = p;
-      }
-    }
-
-    const visOk = etaCondition.isGreater ? true : (etaCondition.visMiles >= minima[flight.callsign].vis);
-    const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
-    const belowMinima = !(visOk && ceilOk);
-
-    // Add/update status label
-    const tafSection = container.querySelector(".mt-2.text-xs");
-    if (tafSection) {
-      let status = tafSection.querySelector(".mt-2.text-sm");
-      if (!status) {
-        status = document.createElement("div");
-        status.className = "mt-2 text-sm";
-        tafSection.appendChild(status);
-      }
-      status.innerHTML = belowMinima
-        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
-        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
-    }
-  }
-}
 </script>
-
-
-
 </body>
 </html>
