@@ -53,7 +53,14 @@ document.getElementById("flightFilterInput").addEventListener("keypress", e => {
 });
 
 // === Wrap updateTile for ETA highlight ===
+const _original_updateTile = updateTile;
+updateTile = async function(flight, container) {
+  await _original_updateTile(flight, container);
 
+  const useAlt = toggleAlt[flight.callsign];
+  const icao = useAlt ? flight.alticao : flight.arricao;
+  const tafRaw = await fetchTAF(icao);
+  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
 
   const tafLines = tafRaw.split("\n");
   let etaLineIndex = -1;
@@ -95,7 +102,14 @@ if (tafCheck.below) {
 
 
 // === ETA-based TAF Highlight Patch (Direct Rewrite) ===
+const _patched_updateTile = updateTile;
+updateTile = async function(flight, container) {
+  await _patched_updateTile(flight, container);
 
+  const useAlt = toggleAlt[flight.callsign];
+  const icao = useAlt ? flight.alticao : flight.arricao;
+  const tafRaw = await fetchTAF(icao);
+  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
 
   const tafLines = tafRaw.split("\n");
   let etaLineIndex = -1;
@@ -213,60 +227,6 @@ function getDate(day, hour, etaDate, minute = 0) {
   const d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
   return d;
 }
-
-
-// === Unified updateTile (CARS-compliant, highlight, filter, shading, animation) ===
-const _base_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  await _base_updateTile(flight, container);
-
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  const tafRaw = await fetchTAF(icao);
-  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-
-  // ETA-based highlight using processTAF
-  const tafLines = tafRaw.split("\n");
-  let etaLineIndex = -1;
-  for (let i = 0; i < tafLines.length; i++) {
-    const partialTAF = tafLines.slice(0, i + 1).join("\n");
-    const result = processTAF(partialTAF, min.ceiling, min.vis, flight.eta);
-    if (result.below) {
-      etaLineIndex = i;
-      break;
-    }
-  }
-
-  // Rewrite TAF section with highlight
-  const tafBlock = container.querySelector(".taf-block");
-  if (tafBlock) {
-    tafBlock.innerHTML = `<strong>TAF:</strong><br>` + tafLines.map((line, index) =>
-      `<div class="${index === etaLineIndex ? 'text-red-400 font-bold' : ''}">${line}</div>`
-    ).join("");
-  }
-
-  // Border color
-  const tafCheck = processTAF(tafRaw, min.ceiling, min.vis, flight.eta);
-  container.classList.remove("border-red-600", "border-green-600");
-  container.classList.add(tafCheck.below ? "border-red-600" : "border-green-600");
-
-  // Subtle animated shading
-  container.style.transition = "background-color 0.4s ease, transform 0.2s ease, box-shadow 0.3s ease";
-  container.style.backgroundColor = tafCheck.below ? "rgba(255, 0, 0, 0.025)" : "rgba(0, 255, 0, 0.025)";
-
-  // Hover animation
-  container.addEventListener("mouseenter", () => {
-    container.style.transform = "scale(1.02)";
-    container.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
-  });
-  container.addEventListener("mouseleave", () => {
-    container.style.transform = "scale(1)";
-    container.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.2)";
-  });
-
-  // Filter flights
-  filterFlights();
-};
 
 </script>
   <style>
@@ -850,7 +810,14 @@ document.getElementById("flightFilterInput").addEventListener("keypress", e => {
 });
 
 // === Wrap updateTile for ETA highlight ===
+const _original_updateTile = updateTile;
+updateTile = async function(flight, container) {
+  await _original_updateTile(flight, container);
 
+  const useAlt = toggleAlt[flight.callsign];
+  const icao = useAlt ? flight.alticao : flight.arricao;
+  const tafRaw = await fetchTAF(icao);
+  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
 
   const tafLines = tafRaw.split("\n");
   let etaLineIndex = -1;
@@ -892,7 +859,14 @@ if (tafCheck.below) {
 
 
 // === ETA-based TAF Highlight Patch (Direct Rewrite) ===
+const _patched_updateTile = updateTile;
+updateTile = async function(flight, container) {
+  await _patched_updateTile(flight, container);
 
+  const useAlt = toggleAlt[flight.callsign];
+  const icao = useAlt ? flight.alticao : flight.arricao;
+  const tafRaw = await fetchTAF(icao);
+  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
 
   const tafLines = tafRaw.split("\n");
   let etaLineIndex = -1;
@@ -1010,60 +984,6 @@ function getDate(day, hour, etaDate, minute = 0) {
   const d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
   return d;
 }
-
-
-// === Unified updateTile (CARS-compliant, highlight, filter, shading, animation) ===
-const _base_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  await _base_updateTile(flight, container);
-
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  const tafRaw = await fetchTAF(icao);
-  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-
-  // ETA-based highlight using processTAF
-  const tafLines = tafRaw.split("\n");
-  let etaLineIndex = -1;
-  for (let i = 0; i < tafLines.length; i++) {
-    const partialTAF = tafLines.slice(0, i + 1).join("\n");
-    const result = processTAF(partialTAF, min.ceiling, min.vis, flight.eta);
-    if (result.below) {
-      etaLineIndex = i;
-      break;
-    }
-  }
-
-  // Rewrite TAF section with highlight
-  const tafBlock = container.querySelector(".taf-block");
-  if (tafBlock) {
-    tafBlock.innerHTML = `<strong>TAF:</strong><br>` + tafLines.map((line, index) =>
-      `<div class="${index === etaLineIndex ? 'text-red-400 font-bold' : ''}">${line}</div>`
-    ).join("");
-  }
-
-  // Border color
-  const tafCheck = processTAF(tafRaw, min.ceiling, min.vis, flight.eta);
-  container.classList.remove("border-red-600", "border-green-600");
-  container.classList.add(tafCheck.below ? "border-red-600" : "border-green-600");
-
-  // Subtle animated shading
-  container.style.transition = "background-color 0.4s ease, transform 0.2s ease, box-shadow 0.3s ease";
-  container.style.backgroundColor = tafCheck.below ? "rgba(255, 0, 0, 0.025)" : "rgba(0, 255, 0, 0.025)";
-
-  // Hover animation
-  container.addEventListener("mouseenter", () => {
-    container.style.transform = "scale(1.02)";
-    container.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
-  });
-  container.addEventListener("mouseleave", () => {
-    container.style.transform = "scale(1)";
-    container.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.2)";
-  });
-
-  // Filter flights
-  filterFlights();
-};
 
 </script>
 </body>
