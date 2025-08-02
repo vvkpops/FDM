@@ -138,7 +138,54 @@ if (_original_updateTile_working) {
     }
   }
 }
+
+
+// === Ensure ETA minima status in dashboard ===
+const _original_updateTile_highlight = typeof updateTile === 'function' ? updateTile : null;
+if (_original_updateTile_highlight) {
+  updateTile = async function(flight, container) {
+    await _original_updateTile_highlight(flight, container);
+
+    minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
+    toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
+
+    const useAlt = toggleAlt[flight.callsign];
+    const icao = useAlt ? flight.alticao : flight.arricao;
+
+    const [tafRaw] = await Promise.all([fetchTAF(icao)]);
+
+    const eta = new Date(flight.eta);
+    const tafLines = tafRaw.split("\n");
+    let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
+
+    for (const line of tafLines) {
+      const p = parseLine(line);
+      if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
+        etaCondition = p;
+      }
+    }
+
+    const visOk = etaCondition.isGreater ? true : (etaCondition.visMiles >= minima[flight.callsign].vis);
+    const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
+    const belowMinima = !(visOk && ceilOk);
+
+    // Add/update status label
+    const tafSection = container.querySelector(".mt-2.text-xs");
+    if (tafSection) {
+      let status = tafSection.querySelector(".mt-2.text-sm");
+      if (!status) {
+        status = document.createElement("div");
+        status.className = "mt-2 text-sm";
+        tafSection.appendChild(status);
+      }
+      status.innerHTML = belowMinima
+        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
+        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
+    }
+  }
+}
 </script>
+
 
 
   <style>
@@ -181,7 +228,7 @@ if (_original_updateTile_working) {
       <div id="globalDest" class="toggle-btn active" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;color:#fff;background:#2563eb;" onclick="setGlobalToggle(false)">Destination</div>
       <div id="globalAlt" class="toggle-btn" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;color:#d1d5db;" onclick="setGlobalToggle(true)">Alternate</div>
     </div>
-    <button id="toggleAltGlobalBtn" onclick="toggleAllAlternates()" class="bg-purple-600 px-3 py-1 rounded text-white hover:bg-purple-700 text-sm">Toggle All to Alternate</button>
+    <!-- Removed redundant toggleAltGlobalBtn <button id="toggleAltGlobalBtn" onclick="toggleAllAlternates()" class="bg-purple-600 px-3 py-1 rounded text-white hover:bg-purple-700 text-sm">Toggle All to Alternate</button> -->
     <button id="toggleWeatherBtn"
       onclick="toggleWeatherView()"
       class="bg-yellow-600 px-3 py-1 rounded text-white hover:bg-yellow-700 text-sm">
@@ -633,7 +680,54 @@ if (_original_updateTile_working) {
     }
   }
 }
+
+
+// === Ensure ETA minima status in dashboard ===
+const _original_updateTile_highlight = typeof updateTile === 'function' ? updateTile : null;
+if (_original_updateTile_highlight) {
+  updateTile = async function(flight, container) {
+    await _original_updateTile_highlight(flight, container);
+
+    minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
+    toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
+
+    const useAlt = toggleAlt[flight.callsign];
+    const icao = useAlt ? flight.alticao : flight.arricao;
+
+    const [tafRaw] = await Promise.all([fetchTAF(icao)]);
+
+    const eta = new Date(flight.eta);
+    const tafLines = tafRaw.split("\n");
+    let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
+
+    for (const line of tafLines) {
+      const p = parseLine(line);
+      if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
+        etaCondition = p;
+      }
+    }
+
+    const visOk = etaCondition.isGreater ? true : (etaCondition.visMiles >= minima[flight.callsign].vis);
+    const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
+    const belowMinima = !(visOk && ceilOk);
+
+    // Add/update status label
+    const tafSection = container.querySelector(".mt-2.text-xs");
+    if (tafSection) {
+      let status = tafSection.querySelector(".mt-2.text-sm");
+      if (!status) {
+        status = document.createElement("div");
+        status.className = "mt-2 text-sm";
+        tafSection.appendChild(status);
+      }
+      status.innerHTML = belowMinima
+        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
+        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
+    }
+  }
+}
 </script>
+
 
 
 </body>
