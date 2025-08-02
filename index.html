@@ -3,7 +3,91 @@
 <head>
   <meta charset="UTF-8" />
   <title>FlyHigh™ Dispatch</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com">
+
+// === Flight Filters ===
+let flightFilters = [];
+
+function addFlightFilter() {
+  const input = document.getElementById("flightFilterInput");
+  const value = input.value.trim().toUpperCase();
+  if (value && !flightFilters.includes(value)) {
+    flightFilters.push(value);
+    renderFlightFilters();
+    buildDashboard();
+  }
+  input.value = "";
+}
+
+function removeFlightFilter(flt) {
+  flightFilters = flightFilters.filter(f => f !== flt);
+  renderFlightFilters();
+  buildDashboard();
+}
+
+function renderFlightFilters() {
+  const container = document.getElementById("activeFlightFilters");
+  container.innerHTML = "";
+  flightFilters.forEach(flt => {
+    const tag = document.createElement("div");
+    tag.className = "bg-gray-700 px-2 py-1 rounded flex items-center gap-1 text-xs";
+    tag.innerHTML = `${flt} <span class="cursor-pointer text-red-400" onclick="removeFlightFilter('${flt}')">✕</span>`;
+    container.appendChild(tag);
+  });
+}
+
+// Wrap buildDashboard to filter flights
+const _original_buildDashboard = buildDashboard;
+buildDashboard = async function() {
+  await _original_buildDashboard();
+  if (flightFilters.length > 0) {
+    const activeFlights = document.querySelectorAll("#activeFlights .flight-tile");
+    activeFlights.forEach(tile => {
+      const callsign = tile.querySelector(".flight-title")?.innerText.trim();
+      if (callsign && !flightFilters.includes(callsign)) {
+        tile.style.display = "none";
+      } else {
+        tile.style.display = "";
+      }
+    });
+  }
+};
+
+// === Enhance updateTile for ETA-based highlight ===
+const _original_updateTile = updateTile;
+updateTile = async function(flight, container) {
+  await _original_updateTile(flight, container);
+
+  // Highlight only ETA-relevant TAF line in dashboard
+  const useAlt = toggleAlt[flight.callsign];
+  const icao = useAlt ? flight.alticao : flight.arricao;
+  const tafRaw = await fetchTAF(icao);
+  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
+
+  const tafLines = tafRaw.split("\n");
+  let etaLineIndex = -1;
+  for (let i = 0; i < tafLines.length; i++) {
+    const parsed = parseLine(tafLines[i]);
+    const visOk = parsed.isGreater || parsed.visMiles >= min.vis;
+    const ceilOk = parsed.ceiling >= min.ceiling;
+    if (!(visOk && ceilOk)) { etaLineIndex = i; break; }
+  }
+
+  const tafContainer = container.querySelector(".mt-2.text-xs");
+  if (tafContainer) {
+    const tafDivs = tafContainer.querySelectorAll("div");
+    tafDivs.forEach(div => {
+      if (div.innerText.startsWith("TAF:")) {
+        const lines = tafLines.map((l, i) =>
+          `<div class="${i === etaLineIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
+        ).join("");
+        div.innerHTML = `<strong>TAF:</strong><br>${lines}`;
+      }
+    });
+  }
+};
+</script>
+
   <style>
     @media (min-width: 1536px) {
       .flight-tile {
@@ -22,7 +106,20 @@
   <div id="clock-local" class="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-mono text-gray-300"></div>
   FlyHigh™ Dispatch
   <div id="clock-utc" class="absolute right-4 top-1/2 -translate-y-1/2 text-lg font-mono text-gray-300"></div>
+
 </header>
+
+<!-- Flight Filter Panel -->
+<div id="flightFilterPanel" class="fixed top-24 right-4 bg-gray-800 p-4 rounded-lg shadow-lg w-64 border border-gray-700 z-50">
+  <h3 class="text-sm font-bold mb-2">Filter Flights</h3>
+  <div class="flex gap-2 mb-2">
+    <input id="flightFilterInput" type="text" placeholder="Enter flight #"
+      class="flex-1 bg-gray-700 p-1 rounded text-xs text-center" />
+    <button onclick="addFlightFilter()" class="bg-blue-600 px-2 py-1 rounded text-white text-xs">Add</button>
+  </div>
+  <div id="activeFlightFilters" class="flex flex-wrap gap-1"></div>
+</div>
+        
 
 <!-- NAVIGATION -->
 <div class="flex justify-center gap-4 mb-4">
@@ -522,6 +619,90 @@ setInterval(() => {
   document.getElementById("clock-local").textContent = now.toLocaleTimeString() + " Local";
   document.getElementById("clock-utc").textContent = now.toUTCString().slice(17, 25) + " UTC";
 }, 1000);
+
+
+// === Flight Filters ===
+let flightFilters = [];
+
+function addFlightFilter() {
+  const input = document.getElementById("flightFilterInput");
+  const value = input.value.trim().toUpperCase();
+  if (value && !flightFilters.includes(value)) {
+    flightFilters.push(value);
+    renderFlightFilters();
+    buildDashboard();
+  }
+  input.value = "";
+}
+
+function removeFlightFilter(flt) {
+  flightFilters = flightFilters.filter(f => f !== flt);
+  renderFlightFilters();
+  buildDashboard();
+}
+
+function renderFlightFilters() {
+  const container = document.getElementById("activeFlightFilters");
+  container.innerHTML = "";
+  flightFilters.forEach(flt => {
+    const tag = document.createElement("div");
+    tag.className = "bg-gray-700 px-2 py-1 rounded flex items-center gap-1 text-xs";
+    tag.innerHTML = `${flt} <span class="cursor-pointer text-red-400" onclick="removeFlightFilter('${flt}')">✕</span>`;
+    container.appendChild(tag);
+  });
+}
+
+// Wrap buildDashboard to filter flights
+const _original_buildDashboard = buildDashboard;
+buildDashboard = async function() {
+  await _original_buildDashboard();
+  if (flightFilters.length > 0) {
+    const activeFlights = document.querySelectorAll("#activeFlights .flight-tile");
+    activeFlights.forEach(tile => {
+      const callsign = tile.querySelector(".flight-title")?.innerText.trim();
+      if (callsign && !flightFilters.includes(callsign)) {
+        tile.style.display = "none";
+      } else {
+        tile.style.display = "";
+      }
+    });
+  }
+};
+
+// === Enhance updateTile for ETA-based highlight ===
+const _original_updateTile = updateTile;
+updateTile = async function(flight, container) {
+  await _original_updateTile(flight, container);
+
+  // Highlight only ETA-relevant TAF line in dashboard
+  const useAlt = toggleAlt[flight.callsign];
+  const icao = useAlt ? flight.alticao : flight.arricao;
+  const tafRaw = await fetchTAF(icao);
+  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
+
+  const tafLines = tafRaw.split("\n");
+  let etaLineIndex = -1;
+  for (let i = 0; i < tafLines.length; i++) {
+    const parsed = parseLine(tafLines[i]);
+    const visOk = parsed.isGreater || parsed.visMiles >= min.vis;
+    const ceilOk = parsed.ceiling >= min.ceiling;
+    if (!(visOk && ceilOk)) { etaLineIndex = i; break; }
+  }
+
+  const tafContainer = container.querySelector(".mt-2.text-xs");
+  if (tafContainer) {
+    const tafDivs = tafContainer.querySelectorAll("div");
+    tafDivs.forEach(div => {
+      if (div.innerText.startsWith("TAF:")) {
+        const lines = tafLines.map((l, i) =>
+          `<div class="${i === etaLineIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
+        ).join("");
+        div.innerHTML = `<strong>TAF:</strong><br>${lines}`;
+      }
+    });
+  }
+};
 </script>
+
 </body>
 </html>
