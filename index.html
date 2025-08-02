@@ -85,6 +85,19 @@ updateTile = async function(flight, container) {
   }
 
   filterFlights();
+
+// Update border based on new CARS-compliant processTAF
+const tafCheck = processTAF(tafRaw, min.ceiling, min.vis, flight.eta);
+container.classList.remove("border-red-600", "border-green-600");
+container.classList.add(tafCheck.below ? "border-red-600" : "border-green-600");
+
+// Add subtle background shading
+if (tafCheck.below) {
+  container.style.backgroundColor = "rgba(255, 0, 0, 0.05)"; // very light red
+} else {
+  container.style.backgroundColor = "rgba(0, 255, 0, 0.05)"; // very light green
+}
+
 };
 
 
@@ -118,6 +131,19 @@ updateTile = async function(flight, container) {
   }
 
   filterFlights();
+
+// Update border based on new CARS-compliant processTAF
+const tafCheck = processTAF(tafRaw, min.ceiling, min.vis, flight.eta);
+container.classList.remove("border-red-600", "border-green-600");
+container.classList.add(tafCheck.below ? "border-red-600" : "border-green-600");
+
+// Add subtle background shading
+if (tafCheck.below) {
+  container.style.backgroundColor = "rgba(255, 0, 0, 0.05)"; // very light red
+} else {
+  container.style.backgroundColor = "rgba(0, 255, 0, 0.05)"; // very light green
+}
+
 };
 
 
@@ -816,6 +842,19 @@ updateTile = async function(flight, container) {
   }
 
   filterFlights();
+
+// Update border based on new CARS-compliant processTAF
+const tafCheck = processTAF(tafRaw, min.ceiling, min.vis, flight.eta);
+container.classList.remove("border-red-600", "border-green-600");
+container.classList.add(tafCheck.below ? "border-red-600" : "border-green-600");
+
+// Add subtle background shading
+if (tafCheck.below) {
+  container.style.backgroundColor = "rgba(255, 0, 0, 0.05)"; // very light red
+} else {
+  container.style.backgroundColor = "rgba(0, 255, 0, 0.05)"; // very light green
+}
+
 };
 
 
@@ -849,6 +888,19 @@ updateTile = async function(flight, container) {
   }
 
   filterFlights();
+
+// Update border based on new CARS-compliant processTAF
+const tafCheck = processTAF(tafRaw, min.ceiling, min.vis, flight.eta);
+container.classList.remove("border-red-600", "border-green-600");
+container.classList.add(tafCheck.below ? "border-red-600" : "border-green-600");
+
+// Add subtle background shading
+if (tafCheck.below) {
+  container.style.backgroundColor = "rgba(255, 0, 0, 0.05)"; // very light red
+} else {
+  container.style.backgroundColor = "rgba(0, 255, 0, 0.05)"; // very light green
+}
+
 };
 
 
