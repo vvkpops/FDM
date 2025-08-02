@@ -5,6 +5,7 @@
   <title>FlyHigh™ Dispatch</title>
   <script src="https://cdn.tailwindcss.com">
 
+
 // === Flight Filters ===
 let flightFilters = [];
 
@@ -36,6 +37,29 @@ function renderFlightFilters() {
   });
 }
 
+// === Build Dashboard (FILTER BEFORE RENDER) ===
+const _original_buildDashboard = buildDashboard;
+buildDashboard = async function() {
+  const container = document.getElementById("activeFlights");
+  container.innerHTML = "";
+
+  const filteredFlights = flightFilters.length
+    ? flights.filter(f => flightFilters.includes(f.callsign))
+    : flights;
+
+  for (const flight of filteredFlights) {
+    const div = document.createElement("div");
+    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700";
+    div.id = `tile-${flight.callsign}`;
+    container.appendChild(div);
+    await updateTile(flight, div);
+  }
+};
+
+// === Enter key to add flight ===
+document.getElementById("flightFilterInput").addEventListener("keypress", function(e) {
+  if (e.key === "Enter") addFlightFilter();
+});
 // Wrap buildDashboard to filter flights
 const _original_buildDashboard = buildDashboard;
 buildDashboard = async function() {
@@ -621,6 +645,7 @@ setInterval(() => {
 }, 1000);
 
 
+
 // === Flight Filters ===
 let flightFilters = [];
 
@@ -652,6 +677,29 @@ function renderFlightFilters() {
   });
 }
 
+// === Build Dashboard (FILTER BEFORE RENDER) ===
+const _original_buildDashboard = buildDashboard;
+buildDashboard = async function() {
+  const container = document.getElementById("activeFlights");
+  container.innerHTML = "";
+
+  const filteredFlights = flightFilters.length
+    ? flights.filter(f => flightFilters.includes(f.callsign))
+    : flights;
+
+  for (const flight of filteredFlights) {
+    const div = document.createElement("div");
+    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700";
+    div.id = `tile-${flight.callsign}`;
+    container.appendChild(div);
+    await updateTile(flight, div);
+  }
+};
+
+// === Enter key to add flight ===
+document.getElementById("flightFilterInput").addEventListener("keypress", function(e) {
+  if (e.key === "Enter") addFlightFilter();
+});
 // Wrap buildDashboard to filter flights
 const _original_buildDashboard = buildDashboard;
 buildDashboard = async function() {
