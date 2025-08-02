@@ -62,14 +62,15 @@ updateTile = async function(flight, container) {
   const tafRaw = await fetchTAF(icao);
   const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
 
-  const tafLines = tafRaw.split("\n");
-  let etaLineIndex = -1;
-  for (let i = 0; i < tafLines.length; i++) {
-    const parsed = parseLine(tafLines[i]);
+  const eta = flight.eta;
+  const tafLines = tafRaw.split("
+");
+  const etaSegmentIndex = tafLines.findIndex(line => {
+    const parsed = parseLine(line);
     const visOk = parsed.isGreater || parsed.visMiles >= min.vis;
     const ceilOk = parsed.ceiling >= min.ceiling;
-    if (!(visOk && ceilOk)) { etaLineIndex = i; break; }
-  }
+    return !(visOk && ceilOk);
+  });
 
   const tafContainer = container.querySelector(".mt-2.text-xs");
   if (tafContainer) {
@@ -77,7 +78,7 @@ updateTile = async function(flight, container) {
     tafDivs.forEach(div => {
       if (div.innerText.startsWith("TAF:")) {
         const lines = tafLines.map((l, i) =>
-          `<div class="${i === etaLineIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
+          `<div class="${i === etaSegmentIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
         ).join("");
         div.innerHTML = `<strong>TAF:</strong><br>${lines}`;
       }
@@ -678,14 +679,15 @@ updateTile = async function(flight, container) {
   const tafRaw = await fetchTAF(icao);
   const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
 
-  const tafLines = tafRaw.split("\n");
-  let etaLineIndex = -1;
-  for (let i = 0; i < tafLines.length; i++) {
-    const parsed = parseLine(tafLines[i]);
+  const eta = flight.eta;
+  const tafLines = tafRaw.split("
+");
+  const etaSegmentIndex = tafLines.findIndex(line => {
+    const parsed = parseLine(line);
     const visOk = parsed.isGreater || parsed.visMiles >= min.vis;
     const ceilOk = parsed.ceiling >= min.ceiling;
-    if (!(visOk && ceilOk)) { etaLineIndex = i; break; }
-  }
+    return !(visOk && ceilOk);
+  });
 
   const tafContainer = container.querySelector(".mt-2.text-xs");
   if (tafContainer) {
@@ -693,7 +695,7 @@ updateTile = async function(flight, container) {
     tafDivs.forEach(div => {
       if (div.innerText.startsWith("TAF:")) {
         const lines = tafLines.map((l, i) =>
-          `<div class="${i === etaLineIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
+          `<div class="${i === etaSegmentIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
         ).join("");
         div.innerHTML = `<strong>TAF:</strong><br>${lines}`;
       }
