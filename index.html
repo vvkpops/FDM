@@ -87,41 +87,6 @@ updateTile = async function(flight, container) {
   filterFlights();
 };
 
-
-// === ETA-based TAF Highlight (Safe Patch) ===
-const _original_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  await _original_updateTile(flight, container);
-
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  const tafRaw = await fetchTAF(icao);
-  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-
-  const tafLines = tafRaw.split("\n");
-  let etaIndex = -1;
-  for (let i = 0; i < tafLines.length; i++) {
-    const parsed = parseLine(tafLines[i]);
-    const visOk = parsed.isGreater || parsed.visMiles >= min.vis;
-    const ceilOk = parsed.ceiling >= min.ceiling;
-    if (!(visOk && ceilOk)) { etaIndex = i; break; }
-  }
-
-  const tafSection = container.querySelector(".mt-2.text-xs");
-  if (tafSection) {
-    const tafDivs = tafSection.querySelectorAll("div");
-    tafDivs.forEach(div => {
-      if (div.innerText.startsWith("TAF:")) {
-        div.innerHTML = `<strong>TAF:</strong><br>` + tafLines.map((l, i) =>
-          `<div class="${i === etaIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
-        ).join("");
-      }
-    });
-  }
-
-  filterFlights();
-};
-
 </script>
   <style>
     @media (min-width: 1536px) {
@@ -731,41 +696,6 @@ updateTile = async function(flight, container) {
           `<div class="${i === etaLineIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
         ).join("");
         div.innerHTML = `<strong>TAF:</strong><br>${lines}`;
-      }
-    });
-  }
-
-  filterFlights();
-};
-
-
-// === ETA-based TAF Highlight (Safe Patch) ===
-const _original_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  await _original_updateTile(flight, container);
-
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  const tafRaw = await fetchTAF(icao);
-  const min = minima[flight.callsign] || { ceiling: 500, vis: 1 };
-
-  const tafLines = tafRaw.split("\n");
-  let etaIndex = -1;
-  for (let i = 0; i < tafLines.length; i++) {
-    const parsed = parseLine(tafLines[i]);
-    const visOk = parsed.isGreater || parsed.visMiles >= min.vis;
-    const ceilOk = parsed.ceiling >= min.ceiling;
-    if (!(visOk && ceilOk)) { etaIndex = i; break; }
-  }
-
-  const tafSection = container.querySelector(".mt-2.text-xs");
-  if (tafSection) {
-    const tafDivs = tafSection.querySelectorAll("div");
-    tafDivs.forEach(div => {
-      if (div.innerText.startsWith("TAF:")) {
-        div.innerHTML = `<strong>TAF:</strong><br>` + tafLines.map((l, i) =>
-          `<div class="${i === etaIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
-        ).join("");
       }
     });
   }
