@@ -228,19 +228,6 @@ function getDate(day, hour, etaDate, minute = 0) {
   return d;
 }
 
-
-
-
-
-function addWeatherICAOFromTile(icao) {
-  icao = icao.trim().toUpperCase();
-  if (icao && !weatherICAOs.includes(icao)) {
-    weatherICAOs.push(icao);
-    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-    buildWeatherTiles();
-  }
-}
-
 </script>
   <style>
     @media (min-width: 1536px) {
@@ -717,7 +704,7 @@ async function updateTile(flight, container) {
   container.innerHTML = `
     <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
     <div class="flex justify-between items-center text-sm mb-2">
-        <span>Weather: <span class=\"cursor-pointer text-blue-400 hover:underline\" onclick=\"addWeatherICAOFromTile('${useAlt ? flight.alticao : flight.arricao}')\">${useAlt ? flight.alticao : flight.arricao}</span></span>
+        <span>Weather: ${useAlt ? flight.alticao : flight.arricao}</span>
         <div class="inline-flex bg-gray-700 rounded-full p-1">
           <span onclick="setAlternate('${flight.callsign}', false)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${!useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Destination</span>
           <span onclick="setAlternate('${flight.callsign}', true)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Alternate</span>
@@ -1212,19 +1199,6 @@ function getDate(day, hour, etaDate, minute = 0) {
   return d;
 }
 
-
-
-
-
-function addWeatherICAOFromTile(icao) {
-  icao = icao.trim().toUpperCase();
-  if (icao && !weatherICAOs.includes(icao)) {
-    weatherICAOs.push(icao);
-    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-    buildWeatherTiles();
-  }
-}
-
 </script>
   <style>
     @media (min-width: 1536px) {
@@ -1701,7 +1675,7 @@ async function updateTile(flight, container) {
   container.innerHTML = `
     <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
     <div class="flex justify-between items-center text-sm mb-2">
-        <span>Weather: <span class=\"cursor-pointer text-blue-400 hover:underline\" onclick=\"addWeatherICAOFromTile('${useAlt ? flight.alticao : flight.arricao}')\">${useAlt ? flight.alticao : flight.arricao}</span></span>
+        <span>Weather: ${useAlt ? flight.alticao : flight.arricao}</span>
         <div class="inline-flex bg-gray-700 rounded-full p-1">
           <span onclick="setAlternate('${flight.callsign}', false)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${!useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Destination</span>
           <span onclick="setAlternate('${flight.callsign}', true)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Alternate</span>
@@ -1982,19 +1956,6 @@ function getDate(day, hour, etaDate, minute = 0) {
   return d;
 }
 
-
-
-
-
-function addWeatherICAOFromTile(icao) {
-  icao = icao.trim().toUpperCase();
-  if (icao && !weatherICAOs.includes(icao)) {
-    weatherICAOs.push(icao);
-    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-    buildWeatherTiles();
-  }
-}
-
 </script>
 </body>
 </html>
@@ -2012,19 +1973,6 @@ function addWeatherICAOFromTile(icao) {
 function getDate(day, hour, etaDate, minute = 0) {
   const d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
   return d;
-}
-
-
-
-
-
-function addWeatherICAOFromTile(icao) {
-  icao = icao.trim().toUpperCase();
-  if (icao && !weatherICAOs.includes(icao)) {
-    weatherICAOs.push(icao);
-    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-    buildWeatherTiles();
-  }
 }
 
 </script>
