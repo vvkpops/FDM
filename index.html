@@ -97,7 +97,7 @@
 const minima = {}, flights = [], toggleAlt = {};
 let showWeather = true;
 
-// === GLOBAL TOGGLE HANDLER ===
+// === GLOBAL TOGGLE SWITCH ===
 function setGlobalToggle(toAlt) {
   document.getElementById("globalDest").classList.toggle("active", !toAlt);
   document.getElementById("globalAlt").classList.toggle("active", toAlt);
@@ -105,15 +105,17 @@ function setGlobalToggle(toAlt) {
   buildDashboard();
 }
 
+// === UPDATE TILE OVERRIDE ===
 async function updateTile(flight, container) {
-  const useAlt = toggleAlt[flight.callsign] || false;
+  minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
+  toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
+  const useAlt = toggleAlt[flight.callsign];
   const icao = useAlt ? flight.alticao : flight.arricao;
 
   const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
   const taf = highlightTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis);
 
-  container.classList.remove("border-red-600", "border-green-600");
-  container.classList.add(taf.below ? "border-red-600" : "border-green-600");
+  container.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border " + (taf.below ? "border-red-600" : "border-green-600");
 
   container.innerHTML = `
     <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
