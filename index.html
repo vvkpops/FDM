@@ -5,7 +5,6 @@
   <title>FlyHigh™ Dispatch</title>
   <script src="https://cdn.tailwindcss.com">
 
-
 // === Flight Filters ===
 let flightFilters = [];
 
@@ -37,7 +36,7 @@ function renderFlightFilters() {
   });
 }
 
-// === Build Dashboard (FILTER BEFORE RENDER) ===
+// Modify buildDashboard to filter before rendering
 const _original_buildDashboard = buildDashboard;
 buildDashboard = async function() {
   const container = document.getElementById("activeFlights");
@@ -56,33 +55,16 @@ buildDashboard = async function() {
   }
 };
 
-// === Enter key to add flight ===
+// Enter key to add flights
 document.getElementById("flightFilterInput").addEventListener("keypress", function(e) {
   if (e.key === "Enter") addFlightFilter();
 });
-// Wrap buildDashboard to filter flights
-const _original_buildDashboard = buildDashboard;
-buildDashboard = async function() {
-  await _original_buildDashboard();
-  if (flightFilters.length > 0) {
-    const activeFlights = document.querySelectorAll("#activeFlights .flight-tile");
-    activeFlights.forEach(tile => {
-      const callsign = tile.querySelector(".flight-title")?.innerText.trim();
-      if (callsign && !flightFilters.includes(callsign)) {
-        tile.style.display = "none";
-      } else {
-        tile.style.display = "";
-      }
-    });
-  }
-};
 
-// === Enhance updateTile for ETA-based highlight ===
+// Enhance updateTile to highlight ETA-relevant TAF line
 const _original_updateTile = updateTile;
 updateTile = async function(flight, container) {
   await _original_updateTile(flight, container);
 
-  // Highlight only ETA-relevant TAF line in dashboard
   const useAlt = toggleAlt[flight.callsign];
   const icao = useAlt ? flight.alticao : flight.arricao;
   const tafRaw = await fetchTAF(icao);
@@ -645,7 +627,6 @@ setInterval(() => {
 }, 1000);
 
 
-
 // === Flight Filters ===
 let flightFilters = [];
 
@@ -677,7 +658,7 @@ function renderFlightFilters() {
   });
 }
 
-// === Build Dashboard (FILTER BEFORE RENDER) ===
+// Modify buildDashboard to filter before rendering
 const _original_buildDashboard = buildDashboard;
 buildDashboard = async function() {
   const container = document.getElementById("activeFlights");
@@ -696,33 +677,16 @@ buildDashboard = async function() {
   }
 };
 
-// === Enter key to add flight ===
+// Enter key to add flights
 document.getElementById("flightFilterInput").addEventListener("keypress", function(e) {
   if (e.key === "Enter") addFlightFilter();
 });
-// Wrap buildDashboard to filter flights
-const _original_buildDashboard = buildDashboard;
-buildDashboard = async function() {
-  await _original_buildDashboard();
-  if (flightFilters.length > 0) {
-    const activeFlights = document.querySelectorAll("#activeFlights .flight-tile");
-    activeFlights.forEach(tile => {
-      const callsign = tile.querySelector(".flight-title")?.innerText.trim();
-      if (callsign && !flightFilters.includes(callsign)) {
-        tile.style.display = "none";
-      } else {
-        tile.style.display = "";
-      }
-    });
-  }
-};
 
-// === Enhance updateTile for ETA-based highlight ===
+// Enhance updateTile to highlight ETA-relevant TAF line
 const _original_updateTile = updateTile;
 updateTile = async function(flight, container) {
   await _original_updateTile(flight, container);
 
-  // Highlight only ETA-relevant TAF line in dashboard
   const useAlt = toggleAlt[flight.callsign];
   const icao = useAlt ? flight.alticao : flight.arricao;
   const tafRaw = await fetchTAF(icao);
