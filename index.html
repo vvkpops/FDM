@@ -3,66 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <title>FlyHigh™ Dispatch</title>
-  <script src="https://cdn.tailwindcss.com">
-// === Alternate Global Toggle ===
-function toggleAllAlternates() {
-  const toAlt = Object.values(toggleAlt).some(v => !v);
-  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
-  buildDashboard();
-}
-
-// Modify updateTile to respect destination/alternate toggle
-const _orig_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-  const taf = highlightTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis);
-
-  container.innerHTML = `
-    <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
-    <div class="text-sm text-center mb-2">Destination: ${flight.arricao} | Alternate: ${flight.alticao}
-      <span class="block text-xs text-yellow-400">${useAlt ? '(Using Alternate)' : '(Using Destination)'}</span>
-    </div>
-    <div class="text-lg flex justify-around mt-2 mb-2">
-      <div>STD: ${shortTime(flight.std)}</div>
-      <div>STA: ${shortTime(flight.sta)}</div>
-      <div>ETA: ${shortTime(flight.eta)}</div>
-    </div>
-    <div class="w-full bg-gray-700 rounded h-2 mt-1">
-      <div class="bg-green-500 h-2 rounded" style="width:${calculateProgress(flight.std, flight.eta)}%"></div>
-    </div>
-    <div class="flex justify-between text-sm mt-1 font-bold">
-      <div>${flight.depicao}</div>
-      <div>${flight.arricao}</div>
-    </div>
-    <div class="flex justify-center mt-2">
-      <button onclick="toggleAlt['${flight.callsign}']=!toggleAlt['${flight.callsign}']; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))" class="bg-purple-600 px-2 py-1 text-xs rounded text-white hover:bg-purple-700">Toggle Alternate</button>
-    </div>
-    ${showWeather ? `
-      <div class="flex gap-3 items-center mt-2 text-xs">
-        <label>Ceil: <input type="number" value="${minima[flight.callsign].ceiling}" class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${flight.callsign}'].ceiling=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))"/></label>
-        <label>Vis: <input type="number" step="0.1" value="${minima[flight.callsign].vis}" class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${flight.callsign}'].vis=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))"/></label>
-      </div>
-      ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
-      ${taf.html ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
-      <div class="mt-2 text-sm">${taf.below ? '<span class="text-red-400 font-bold">🚨 Below minima</span>' : '<span class="text-green-400 font-bold">✅ Above minima</span>'}</div>
-    ` : ""}
-  `;
-}
-</script>
-
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @media (min-width: 1536px) {
-      .flight-tile {
-        font-size: 0.9rem;
-        padding: 0.75rem;
-      }
-      .flight-title {
-        font-size: 1.25rem;
-      }
+      .flight-tile { font-size: 0.9rem; padding: 0.75rem; }
+      .flight-title { font-size: 1.25rem; }
+    }
+    .toggle-container {
+      display: flex;
+      background-color: #374151;
+      border-radius: 9999px;
+      overflow: hidden;
+      width: 180px;
+    }
+    .toggle-btn {
+      flex: 1;
+      padding: 4px 0;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      color: #d1d5db;
+    }
+    .toggle-btn.active {
+      background-color: #2563eb;
+      color: white;
     }
   </style>
 </head>
@@ -90,12 +56,14 @@ updateTile = async function(flight, container) {
       <input id="globalVis" type="number" step="0.1" class="bg-gray-700 p-1 rounded w-24 text-center" />
     </label>
     <button onclick="applyGlobalMinima()" class="bg-green-600 px-3 py-1 rounded text-white hover:bg-green-700 text-sm">Apply to All</button>
-    <button id="toggleAltGlobalBtn" onclick="toggleAllAlternates()" class="bg-purple-600 px-3 py-1 rounded text-white hover:bg-purple-700 text-sm">Toggle All to Alternate</button>
-    <button id="toggleWeatherBtn"
-      onclick="toggleWeatherView()"
-      class="bg-yellow-600 px-3 py-1 rounded text-white hover:bg-yellow-700 text-sm">
-      Minimize Weather
-    </button>
+
+    <!-- GLOBAL TOGGLE SWITCH -->
+    <div class="toggle-container">
+      <div id="globalDest" class="toggle-btn active" onclick="setGlobalToggle(false)">Destination</div>
+      <div id="globalAlt" class="toggle-btn" onclick="setGlobalToggle(true)">Alternate</div>
+    </div>
+
+    <button id="toggleWeatherBtn" onclick="toggleWeatherView()" class="bg-yellow-600 px-3 py-1 rounded text-white hover:bg-yellow-700 text-sm">Minimize Weather</button>
   </div>
 </div>
 
@@ -126,308 +94,30 @@ updateTile = async function(flight, container) {
 </footer>
 
 <script>
-const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrYY4e86FUw6GFaHj1I_VI2JRmKgkLepqs2uJ4myjzRUYUz3TNpOsNSJvxZELbdwN2Pe_fTdEfNyWE/pub?gid=549523756&single=true&output=csv";
-const corsProxy = "https://corsproxy.io/?";
-const weatherCache = {};
-const TAF_CACHE_MS = 600000;
-const METAR_CACHE_MS = 60000;
 const minima = {}, flights = [], toggleAlt = {};
 let showWeather = true;
-let weatherICAOs = JSON.parse(localStorage.getItem("weatherICAOs") || "[]");
 
-// Load flights from Google Sheets
-async function loadFlights() {
-  const res = await fetch(csvUrl + "&" + Date.now());
-  const txt = await res.text();
-  const [header, ...lines] = txt.trim().split("\n");
-  const keys = header.split(",").map(k => k.trim().toLowerCase());
-  flights.length = 0;
-  lines.forEach(line => {
-    const values = line.split(",");
-    const obj = {};
-    keys.forEach((k, i) => obj[k] = values[i]?.trim());
-    flights.push({
-      callsign: obj.callsign,
-      depicao: obj.departureicao,
-      alticao: obj.alternateicao,
-      std: obj.departuretime.endsWith("Z") ? obj.departuretime : obj.departuretime + "Z",
-      sta: obj.arrivaltime.endsWith("Z") ? obj.arrivaltime : obj.arrivaltime + "Z",
-      eta: obj.eta.endsWith("Z") ? obj.eta : obj.eta + "Z",
-      arricao: obj.arrivalicao
-    });
-  });
-}
-
-async function fetchTAF(icao) {
-  if (!icao) return "";
-  const cached = weatherCache[icao]?.taf;
-  if (cached && (Date.now() - cached.time < TAF_CACHE_MS)) return cached.data;
-  const res = await fetch(`${corsProxy}https://aviationweather.gov/cgi-bin/data/taf.php?ids=${icao}&format=raw`);
-  const text = (await res.text()).trim();
-  weatherCache[icao] = weatherCache[icao] || {};
-  weatherCache[icao].taf = { data: text, time: Date.now() };
-  return text;
-}
-
-async function fetchMETAR(icao) {
-  if (!icao) return "";
-  const cached = weatherCache[icao]?.metar;
-  if (cached && (Date.now() - cached.time < METAR_CACHE_MS)) return cached.data;
-  const res = await fetch(`${corsProxy}https://aviationweather.gov/cgi-bin/data/metar.php?ids=${icao}&format=raw`);
-  const text = (await res.text()).trim();
-  weatherCache[icao] = weatherCache[icao] || {};
-  weatherCache[icao].metar = { data: text, time: Date.now() };
-  return text;
-}
-
-function shortTime(s) {
-  const d = new Date(s);
-  return d.toISOString().slice(11, 16) + "Z";
-}
-
-function calculateProgress(std, eta) {
-  const now = new Date(), start = new Date(std), end = new Date(eta);
-  if (now < start) return 0;
-  if (now > end) return 100;
-  return ((now - start) / (end - start) * 100).toFixed(1);
-}
-
-function applyGlobalMinima() {
-  const ceil = parseFloat(document.getElementById("globalCeiling").value);
-  const vis = parseFloat(document.getElementById("globalVis").value);
-  Object.keys(minima).forEach(c => minima[c] = { ceiling: ceil, vis: vis });
-  buildDashboard();
-  buildWeatherTiles();
-}
-
-function toggleWeatherView() {
-  showWeather = !showWeather;
-  document.getElementById("toggleWeatherBtn").textContent = showWeather ? "Minimize Weather" : "Show Weather";
-  buildDashboard();
-  buildWeatherTiles();
-}
-
-function parseLine(line) {
-  let ceiling = Infinity, visMiles = Infinity, isGreater = false;
-  const cloud = line.match(/(BKN|OVC|VV)(\d{3})/);
-  if (cloud) ceiling = parseInt(cloud[2]) * 100;
-  const vis = line.match(/(P?\d{1,2})SM/);
-  if (vis) {
-    if (vis[1].startsWith("P")) { visMiles = parseInt(vis[1].slice(1)); isGreater = true; }
-    else visMiles = parseInt(vis[1]);
-  }
-  return { ceiling, visMiles, isGreater };
-}
-
-function highlightTAF(raw, minC, minV) {
-  let below = false;
-  const html = raw.split("\n").map(line => {
-    const p = parseLine(line);
-    const visOk = p.isGreater ? true : (p.visMiles >= minV);
-    const ceilOk = p.ceiling >= minC;
-    if (!(visOk && ceilOk)) below = true;
-    return `<div class="${!(visOk && ceilOk) ? "text-red-400" : ""}">${line}</div>`;
-  }).join("");
-  return { html, below };
-}
-
-function showPage(page) {
-  document.getElementById("flightsPage").classList.toggle("hidden", page !== "flights");
-  document.getElementById("weatherPage").classList.toggle("hidden", page !== "weather");
-}
-
-async function updateWeatherTile(icao, container) {
-  minima[icao] = minima[icao] || { ceiling: 500, vis: 1 };
-  const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-  const taf = highlightTAF(tafRaw, minima[icao].ceiling, minima[icao].vis);
-
-  container.innerHTML = `
-    <div class="flight-title text-2xl font-bold text-center">${icao}</div>
-    ${showWeather ? `
-      <div class="flex gap-3 items-center mt-2 text-xs">
-        <label>Ceil: <input type="number" value="${minima[icao].ceiling}"
-          class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${icao}'].ceiling=this.value; buildWeatherTiles()"/></label>
-        <label>Vis: <input type="number" step="0.1" value="${minima[icao].vis}"
-          class="bg-gray-700 p-1 rounded w-20 text-center"
-          onchange="minima['${icao}'].vis=this.value; buildWeatherTiles()"/></label>
-      </div>
-      ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
-      ${taf.html ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
-    ` : ""}
-    <div class="flex justify-end mt-2">
-      <button onclick="removeWeatherICAO('${icao}')" class="bg-red-600 px-2 py-1 text-xs rounded text-white hover:bg-red-700">Remove</button>
-    </div>
-  `;
-
-  container.classList.remove("border-gray-700", "border-red-500", "border-green-500");
-  if (taf.html) {
-    container.classList.add(taf.below ? "border-red-500" : "border-green-500");
-  } else {
-    container.classList.add("border-gray-700");
-  }
-}
-
-function addWeatherICAO() {
-  const icaoInput = document.getElementById("icaoInput");
-  const icao = icaoInput.value.trim().toUpperCase();
-  if (icao && !weatherICAOs.includes(icao)) {
-    weatherICAOs.push(icao);
-    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-    buildWeatherTiles();
-  }
-  icaoInput.value = "";
-  icaoInput.focus();
-}
-
-document.getElementById("icaoInput").addEventListener("keypress", function (e) {
-  if (e.key === "Enter") {
-    addWeatherICAO();
-  }
-});
-
-function removeWeatherICAO(icao) {
-  weatherICAOs = weatherICAOs.filter(i => i !== icao);
-  localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-  buildWeatherTiles();
-}
-
-function buildWeatherTiles() {
-  const container = document.getElementById("weatherTiles");
-  container.innerHTML = "";
-  weatherICAOs.forEach(icao => {
-    const div = document.createElement("div");
-    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700";
-    container.appendChild(div);
-    updateWeatherTile(icao, div);
-  });
-}
-
-async function buildDashboard() {
-  const now=new Date(), completed=[], enroute=[], scheduled=[];
-  flights.forEach(f=>{
-    minima[f.callsign]=minima[f.callsign]||{ceiling:500,vis:1};
-    toggleAlt[f.callsign]=toggleAlt[f.callsign]!==undefined?toggleAlt[f.callsign]:false;
-    const start=new Date(f.std), end=new Date(f.eta);
-    if(now>end) completed.push(f);
-    else if(start<=now && now<=end) enroute.push(f);
-    else if(start>now && (start-now)<=12*3600000) scheduled.push(f);
-  });
-  completed.sort((a,b)=>new Date(b.eta)-new Date(a.eta));
-  enroute.sort((a,b)=>new Date(a.eta)-new Date(b.eta));
-  scheduled.sort((a,b)=>new Date(a.std)-new Date(b.std));
-  const activeContainer=document.getElementById("activeFlights");
-  const completedContainer=document.getElementById("completedFlights");
-  activeContainer.innerHTML=completedContainer.innerHTML="";
-  completed.slice(0,10).forEach(f=>{
-    const div=document.createElement("div");
-    div.className="flight-tile bg-gray-800 rounded-lg shadow p-3 border border-gray-700";
-    div.innerHTML=`<div class="text-xl font-bold text-center mb-1">${f.callsign}</div>
-      <div class="flex justify-around text-sm mb-1"><div>STD: ${shortTime(f.std)}</div>
-      <div>STA: ${shortTime(f.sta)}</div><div>ETA: ${shortTime(f.eta)}</div></div>
-      <div class="w-full bg-gray-700 rounded h-1 mt-1"><div class="bg-green-500 h-1 rounded w-full"></div></div>
-      <div class="flex justify-between text-xs mt-1 font-bold">
-      <div>${f.depicao} (STD)</div><div>${f.arricao} (ETA)</div></div>
-      <div class="text-xs mt-1 font-bold">Alternate: ${f.alticao}</div>`;
-    completedContainer.appendChild(div);
-  });
-  [...enroute,...scheduled].forEach(f=>{
-    const div=document.createElement("div");
-    div.className="flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700 hover:scale-105 transition-transform duration-300";
-    activeContainer.appendChild(div);
-    updateTile(f, div);
-  });
-  document.getElementById("lastUpdated").textContent=new Date().toUTCString().slice(17,25);
-}
-
-async function updateTile(flight, container) {
-  const useAlt = toggleAlt[flight.callsign];
-  const icao = useAlt ? flight.alticao : flight.arricao;
-  let tafRaw="", metarRaw="", taf={html:"",below:false};
-  if (icao) {
-    [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
-    taf = highlightTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis);
-  }
-  const status = taf.html
-    ? (taf.below 
-        ? `<span class="text-red-400 font-bold">🚨 Below minima</span>`
-        : `<span class="text-green-400 font-bold">✅ Above minima</span>`)
-    : "";
-
-  container.innerHTML = `
-    <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
-    <div class="text-sm text-center mb-2">Destination: ${flight.arricao} | Alternate: ${flight.alticao}</div>
-    <div class="text-lg flex justify-around mt-2 mb-2">
-      <div>STD: ${shortTime(flight.std)}</div>
-      <div>STA: ${shortTime(flight.sta)}</div>
-      <div>ETA: ${shortTime(flight.eta)}</div>
-    </div>
-    <div class="w-full bg-gray-700 rounded h-2 mt-1">
-      <div class="bg-green-500 h-2 rounded" style="width:${calculateProgress(flight.std, flight.eta)}%"></div>
-    </div>
-    <div class="flex justify-between text-sm mt-1 font-bold">
-      <div>${flight.depicao} (STD)</div>
-      <div>${flight.arricao} (ETA)</div>
-    </div>
-    ${showWeather ? `
-    <div class="flex gap-3 items-center mt-2 text-xs">
-      <label>Ceil: <input type="number" value="${minima[flight.callsign].ceiling}"
-        class="bg-gray-700 p-1 rounded w-20 text-center"
-        onchange="minima['${flight.callsign}'].ceiling=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.parentNode.parentNode.parentNode)"/></label>
-      <label>Vis: <input type="number" step="0.1" value="${minima[flight.callsign].vis}"
-        class="bg-gray-700 p-1 rounded w-20 text-center"
-        onchange="minima['${flight.callsign}'].vis=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.parentNode.parentNode.parentNode)"/></label>
-    </div>
-    ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
-    ${taf.html ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
-    <div class="mt-2 text-sm">${status}</div>
-    ` : ""}
-  `;
-
-  container.classList.remove("border-gray-700", "border-red-500", "border-green-500");
-  if (taf.html) {
-    container.classList.add(taf.below ? "border-red-500" : "border-green-500");
-  } else {
-    container.classList.add("border-gray-700");
-  }
-}
-
-// INIT
-loadFlights().then(() => {
-  buildDashboard();
-  buildWeatherTiles();
-});
-
-setInterval(() => {
-  loadFlights().then(buildDashboard);
-}, 60000);
-
-setInterval(() => {
-  const now = new Date();
-  document.getElementById("clock-local").textContent = now.toLocaleTimeString() + " Local";
-  document.getElementById("clock-utc").textContent = now.toUTCString().slice(17, 25) + " UTC";
-}, 1000);
-
-// === Alternate Global Toggle ===
-function toggleAllAlternates() {
-  const toAlt = Object.values(toggleAlt).some(v => !v);
+// === GLOBAL TOGGLE HANDLER ===
+function setGlobalToggle(toAlt) {
+  document.getElementById("globalDest").classList.toggle("active", !toAlt);
+  document.getElementById("globalAlt").classList.toggle("active", toAlt);
   Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
   buildDashboard();
 }
 
-// Modify updateTile to respect destination/alternate toggle
-const _orig_updateTile = updateTile;
-updateTile = async function(flight, container) {
-  const useAlt = toggleAlt[flight.callsign];
+async function updateTile(flight, container) {
+  const useAlt = toggleAlt[flight.callsign] || false;
   const icao = useAlt ? flight.alticao : flight.arricao;
+
   const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
   const taf = highlightTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis);
 
+  container.classList.remove("border-red-600", "border-green-600");
+  container.classList.add(taf.below ? "border-red-600" : "border-green-600");
+
   container.innerHTML = `
     <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
-    <div class="text-sm text-center mb-2">Destination: ${flight.arricao} | Alternate: ${flight.alticao}
-      <span class="block text-xs text-yellow-400">${useAlt ? '(Using Alternate)' : '(Using Destination)'}</span>
-    </div>
+    <div class="text-sm text-center mb-2">Weather: <span class="font-bold">${icao}</span></div>
     <div class="text-lg flex justify-around mt-2 mb-2">
       <div>STD: ${shortTime(flight.std)}</div>
       <div>STA: ${shortTime(flight.sta)}</div>
@@ -440,9 +130,15 @@ updateTile = async function(flight, container) {
       <div>${flight.depicao}</div>
       <div>${flight.arricao}</div>
     </div>
+
+    <!-- INDIVIDUAL TOGGLE -->
     <div class="flex justify-center mt-2">
-      <button onclick="toggleAlt['${flight.callsign}']=!toggleAlt['${flight.callsign}']; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))" class="bg-purple-600 px-2 py-1 text-xs rounded text-white hover:bg-purple-700">Toggle Alternate</button>
+      <div class="toggle-container">
+        <div class="toggle-btn ${!useAlt ? "active" : ""}" onclick="toggleAlt['${flight.callsign}']=false; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))">Destination</div>
+        <div class="toggle-btn ${useAlt ? "active" : ""}" onclick="toggleAlt['${flight.callsign}']=true; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.closest('.flight-tile'))">Alternate</div>
+      </div>
     </div>
+
     ${showWeather ? `
       <div class="flex gap-3 items-center mt-2 text-xs">
         <label>Ceil: <input type="number" value="${minima[flight.callsign].ceiling}" class="bg-gray-700 p-1 rounded w-20 text-center"
@@ -452,11 +148,9 @@ updateTile = async function(flight, container) {
       </div>
       ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
       ${taf.html ? `<div class="mt-2 text-xs"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
-      <div class="mt-2 text-sm">${taf.below ? '<span class="text-red-400 font-bold">🚨 Below minima</span>' : '<span class="text-green-400 font-bold">✅ Above minima</span>'}</div>
     ` : ""}
   `;
 }
 </script>
-
 </body>
 </html>
