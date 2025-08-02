@@ -54,21 +54,28 @@ updateTile = async function(flight, container) {
 }
 
 
-// === Safe wrapper for updateTile (adds border, toggle, raw TAF) ===
-const _original_updateTile_final = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_final) {
-  updateTile = async function(flight, container) {
-    // Run the original function to build UI
-    await _original_updateTile_final(flight, container);
+// === GLOBAL TOGGLE SWITCH ===
+function setGlobalToggle(toAlt) {
+  document.getElementById("globalDest").style.background = toAlt ? "#374151" : "#2563eb";
+  document.getElementById("globalDest").style.color = toAlt ? "#d1d5db" : "#fff";
+  document.getElementById("globalAlt").style.background = toAlt ? "#2563eb" : "#374151";
+  document.getElementById("globalAlt").style.color = toAlt ? "#fff" : "#d1d5db";
 
-    // Ensure minima and toggle state
+  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
+  buildDashboard();
+}
+
+// === WRAP updateTile: ETA minima, raw TAF in dashboard, toggle UI ===
+const _original_updateTile_working = typeof updateTile === 'function' ? updateTile : null;
+if (_original_updateTile_working) {
+  updateTile = async function(flight, container) {
+    await _original_updateTile_working(flight, container);
+
     minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
     toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
-
     const useAlt = toggleAlt[flight.callsign];
     const icao = useAlt ? flight.alticao : flight.arricao;
 
-    // Fetch weather data
     const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
 
     // ETA-based minima check
@@ -87,16 +94,16 @@ if (_original_updateTile_final) {
     const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
     const belowMinima = !(visOk && ceilOk);
 
-    // Update border only
+    // Border
     container.classList.add("border");
     container.classList.remove("border-red-600", "border-green-600");
     container.classList.add(belowMinima ? "border-red-600" : "border-green-600");
 
-    // Update ICAO label
+    // ICAO label
     const header = container.querySelector(".text-sm.text-center.mb-2");
     if (header) header.innerHTML = `Weather: <span class="font-bold">${icao}</span>`;
 
-    // Add toggle switch UI
+    // Toggle switch UI
     const toggleArea = container.querySelector(".flex.justify-center.mt-2");
     if (toggleArea) {
       toggleArea.innerHTML = `
@@ -109,7 +116,7 @@ if (_original_updateTile_final) {
       `;
     }
 
-    // Update TAF in dashboard to raw (no line highlight)
+    // Raw TAF in dashboard
     const tafSection = container.querySelector(".mt-2.text-xs");
     if (tafSection) {
       const tafDivs = tafSection.querySelectorAll("div");
@@ -119,7 +126,6 @@ if (_original_updateTile_final) {
         }
       });
 
-      // Add minima status indicator
       let status = tafSection.querySelector(".mt-2.text-sm");
       if (!status) {
         status = document.createElement("div");
@@ -171,7 +177,11 @@ if (_original_updateTile_final) {
       <input id="globalVis" type="number" step="0.1" class="bg-gray-700 p-1 rounded w-24 text-center" />
     </label>
     <button onclick="applyGlobalMinima()" class="bg-green-600 px-3 py-1 rounded text-white hover:bg-green-700 text-sm">Apply to All</button>
-    <!-- Removed redundant toggleAltGlobalBtn <button id="toggleAltGlobalBtn" onclick="toggleAllAlternates()" class="bg-purple-600 px-3 py-1 rounded text-white hover:bg-purple-700 text-sm">Toggle All to Alternate</button> -->
+    <div class="toggle-container" style="display:flex;background:#374151;border-radius:9999px;overflow:hidden;width:180px;">
+      <div id="globalDest" class="toggle-btn active" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;color:#fff;background:#2563eb;" onclick="setGlobalToggle(false)">Destination</div>
+      <div id="globalAlt" class="toggle-btn" style="flex:1;padding:4px 0;text-align:center;cursor:pointer;font-size:0.85rem;font-weight:600;color:#d1d5db;" onclick="setGlobalToggle(true)">Alternate</div>
+    </div>
+    <button id="toggleAltGlobalBtn" onclick="toggleAllAlternates()" class="bg-purple-600 px-3 py-1 rounded text-white hover:bg-purple-700 text-sm">Toggle All to Alternate</button>
     <button id="toggleWeatherBtn"
       onclick="toggleWeatherView()"
       class="bg-yellow-600 px-3 py-1 rounded text-white hover:bg-yellow-700 text-sm">
@@ -539,21 +549,28 @@ updateTile = async function(flight, container) {
 }
 
 
-// === Safe wrapper for updateTile (adds border, toggle, raw TAF) ===
-const _original_updateTile_final = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_final) {
-  updateTile = async function(flight, container) {
-    // Run the original function to build UI
-    await _original_updateTile_final(flight, container);
+// === GLOBAL TOGGLE SWITCH ===
+function setGlobalToggle(toAlt) {
+  document.getElementById("globalDest").style.background = toAlt ? "#374151" : "#2563eb";
+  document.getElementById("globalDest").style.color = toAlt ? "#d1d5db" : "#fff";
+  document.getElementById("globalAlt").style.background = toAlt ? "#2563eb" : "#374151";
+  document.getElementById("globalAlt").style.color = toAlt ? "#fff" : "#d1d5db";
 
-    // Ensure minima and toggle state
+  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = toAlt);
+  buildDashboard();
+}
+
+// === WRAP updateTile: ETA minima, raw TAF in dashboard, toggle UI ===
+const _original_updateTile_working = typeof updateTile === 'function' ? updateTile : null;
+if (_original_updateTile_working) {
+  updateTile = async function(flight, container) {
+    await _original_updateTile_working(flight, container);
+
     minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
     toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
-
     const useAlt = toggleAlt[flight.callsign];
     const icao = useAlt ? flight.alticao : flight.arricao;
 
-    // Fetch weather data
     const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
 
     // ETA-based minima check
@@ -572,16 +589,16 @@ if (_original_updateTile_final) {
     const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
     const belowMinima = !(visOk && ceilOk);
 
-    // Update border only
+    // Border
     container.classList.add("border");
     container.classList.remove("border-red-600", "border-green-600");
     container.classList.add(belowMinima ? "border-red-600" : "border-green-600");
 
-    // Update ICAO label
+    // ICAO label
     const header = container.querySelector(".text-sm.text-center.mb-2");
     if (header) header.innerHTML = `Weather: <span class="font-bold">${icao}</span>`;
 
-    // Add toggle switch UI
+    // Toggle switch UI
     const toggleArea = container.querySelector(".flex.justify-center.mt-2");
     if (toggleArea) {
       toggleArea.innerHTML = `
@@ -594,7 +611,7 @@ if (_original_updateTile_final) {
       `;
     }
 
-    // Update TAF in dashboard to raw (no line highlight)
+    // Raw TAF in dashboard
     const tafSection = container.querySelector(".mt-2.text-xs");
     if (tafSection) {
       const tafDivs = tafSection.querySelectorAll("div");
@@ -604,7 +621,6 @@ if (_original_updateTile_final) {
         }
       });
 
-      // Add minima status indicator
       let status = tafSection.querySelector(".mt-2.text-sm");
       if (!status) {
         status = document.createElement("div");
