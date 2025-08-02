@@ -14,7 +14,7 @@ function addFlightFilter() {
   if (value && !flightFilters.includes(value)) {
     flightFilters.push(value);
     renderFlightFilters();
-    buildDashboard();
+    filterFlights();
   }
   input.value = "";
 }
@@ -22,7 +22,7 @@ function addFlightFilter() {
 function removeFlightFilter(flt) {
   flightFilters = flightFilters.filter(f => f !== flt);
   renderFlightFilters();
-  buildDashboard();
+  filterFlights();
 }
 
 function renderFlightFilters() {
@@ -36,31 +36,23 @@ function renderFlightFilters() {
   });
 }
 
-// Modify buildDashboard to filter before rendering
-const _original_buildDashboard = buildDashboard;
-buildDashboard = async function() {
-  const container = document.getElementById("activeFlights");
-  container.innerHTML = "";
+function filterFlights() {
+  const tiles = document.querySelectorAll("#activeFlights .flight-tile");
+  tiles.forEach(tile => {
+    const callsign = tile.querySelector(".flight-title")?.innerText.trim();
+    if (!flightFilters.length || flightFilters.includes(callsign)) {
+      tile.style.display = "";
+    } else {
+      tile.style.display = "none";
+    }
+  });
+}
 
-  const filteredFlights = flightFilters.length
-    ? flights.filter(f => flightFilters.includes(f.callsign))
-    : flights;
-
-  for (const flight of filteredFlights) {
-    const div = document.createElement("div");
-    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700";
-    div.id = `tile-${flight.callsign}`;
-    container.appendChild(div);
-    await updateTile(flight, div);
-  }
-};
-
-// Enter key to add flights
-document.getElementById("flightFilterInput").addEventListener("keypress", function(e) {
+document.getElementById("flightFilterInput").addEventListener("keypress", e => {
   if (e.key === "Enter") addFlightFilter();
 });
 
-// Enhance updateTile to highlight ETA-relevant TAF line
+// === Wrap updateTile for ETA highlight ===
 const _original_updateTile = updateTile;
 updateTile = async function(flight, container) {
   await _original_updateTile(flight, container);
@@ -91,9 +83,11 @@ updateTile = async function(flight, container) {
       }
     });
   }
-};
-</script>
 
+  filterFlights();
+};
+
+</script>
   <style>
     @media (min-width: 1536px) {
       .flight-tile {
@@ -125,7 +119,7 @@ updateTile = async function(flight, container) {
   </div>
   <div id="activeFlightFilters" class="flex flex-wrap gap-1"></div>
 </div>
-        
+
 
 <!-- NAVIGATION -->
 <div class="flex justify-center gap-4 mb-4">
@@ -636,7 +630,7 @@ function addFlightFilter() {
   if (value && !flightFilters.includes(value)) {
     flightFilters.push(value);
     renderFlightFilters();
-    buildDashboard();
+    filterFlights();
   }
   input.value = "";
 }
@@ -644,7 +638,7 @@ function addFlightFilter() {
 function removeFlightFilter(flt) {
   flightFilters = flightFilters.filter(f => f !== flt);
   renderFlightFilters();
-  buildDashboard();
+  filterFlights();
 }
 
 function renderFlightFilters() {
@@ -658,31 +652,23 @@ function renderFlightFilters() {
   });
 }
 
-// Modify buildDashboard to filter before rendering
-const _original_buildDashboard = buildDashboard;
-buildDashboard = async function() {
-  const container = document.getElementById("activeFlights");
-  container.innerHTML = "";
+function filterFlights() {
+  const tiles = document.querySelectorAll("#activeFlights .flight-tile");
+  tiles.forEach(tile => {
+    const callsign = tile.querySelector(".flight-title")?.innerText.trim();
+    if (!flightFilters.length || flightFilters.includes(callsign)) {
+      tile.style.display = "";
+    } else {
+      tile.style.display = "none";
+    }
+  });
+}
 
-  const filteredFlights = flightFilters.length
-    ? flights.filter(f => flightFilters.includes(f.callsign))
-    : flights;
-
-  for (const flight of filteredFlights) {
-    const div = document.createElement("div");
-    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700";
-    div.id = `tile-${flight.callsign}`;
-    container.appendChild(div);
-    await updateTile(flight, div);
-  }
-};
-
-// Enter key to add flights
-document.getElementById("flightFilterInput").addEventListener("keypress", function(e) {
+document.getElementById("flightFilterInput").addEventListener("keypress", e => {
   if (e.key === "Enter") addFlightFilter();
 });
 
-// Enhance updateTile to highlight ETA-relevant TAF line
+// === Wrap updateTile for ETA highlight ===
 const _original_updateTile = updateTile;
 updateTile = async function(flight, container) {
   await _original_updateTile(flight, container);
@@ -713,8 +699,10 @@ updateTile = async function(flight, container) {
       }
     });
   }
-};
-</script>
 
+  filterFlights();
+};
+
+</script>
 </body>
 </html>
