@@ -120,6 +120,88 @@ updateTile = async function(flight, container) {
   filterFlights();
 };
 
+
+// === CARS-Compliant processTAF (Revised) ===
+const _original_processTAF = processTAF;
+processTAF = function(raw, minC, minV, eta) {
+  let below = false;
+  if (!raw) return { below };
+
+  const etaDate = new Date(eta);
+  const lines = raw.split("\n");
+  const segments = [];
+
+  // Extract segments (FM, BECMG, TEMPO, PROB)
+  lines.forEach(line => {
+    line = line.trim();
+    if (!line) return;
+
+    if (line.startsWith("TEMPO") || line.startsWith("PROB")) {
+      const probMatch = line.match(/PROB(\d{2})/);
+      const probValue = probMatch ? parseInt(probMatch[1]) : null;
+
+      const m = line.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const segStart = getDate(sDay, sHour, etaDate);
+      const segEnd = getDate(eDay, eHour, etaDate);
+      const cond = line.substring(m[0].length).trim();
+
+      // Skip PROB < 30 as per CARS
+      if (line.startsWith("PROB") && probValue < 30) return;
+
+      segments.push({ type: line.startsWith("TEMPO") ? "TEMPO" : "PROB", start: segStart, end: segEnd, cond });
+    } 
+    else if (line.startsWith("BECMG")) {
+      const m = line.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const segStart = getDate(sDay, sHour, etaDate);
+      const segEnd = getDate(eDay, eHour, etaDate);
+      const cond = line.substring(m[0].length).trim();
+      segments.push({ type: "BECMG", start: segStart, end: segEnd, cond });
+    } 
+    else if (line.startsWith("FM")) {
+      const m = line.match(/FM(\d{2})(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]), sMin = parseInt(m[3]);
+      const segStart = getDate(sDay, sHour, etaDate, sMin);
+      const cond = line.substring(m[0].length).trim();
+      segments.push({ type: "FM", start: segStart, cond });
+    }
+  });
+
+  // Evaluate TEMPO/PROB first (controlling for alternate minima)
+  for (let seg of segments.filter(s => s.type === "TEMPO" || s.type === "PROB")) {
+    if (etaDate >= seg.start && etaDate <= seg.end) {
+      const p = parseLine(seg.cond);
+      if (!(p.isGreater || p.visMiles >= minV) || p.ceiling < minC) below = true;
+    }
+  }
+
+  // Evaluate BECMG and FM (prevailing conditions)
+  if (!below) {
+    const fmOrBecmg = segments.filter(s => s.type === "FM" || s.type === "BECMG")
+      .sort((a, b) => a.start - b.start);
+    for (let seg of fmOrBecmg) {
+      if (etaDate >= seg.start && (!seg.end || etaDate <= seg.end)) {
+        const p = parseLine(seg.cond);
+        if (!(p.isGreater || p.visMiles >= minV) || p.ceiling < minC) below = true;
+      }
+    }
+  }
+
+  return { below };
+};
+
+// Helper to construct date
+function getDate(day, hour, etaDate, minute = 0) {
+  const d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
+  return d;
+}
+
 </script>
   <style>
     @media (min-width: 1536px) {
@@ -768,6 +850,88 @@ updateTile = async function(flight, container) {
 
   filterFlights();
 };
+
+
+// === CARS-Compliant processTAF (Revised) ===
+const _original_processTAF = processTAF;
+processTAF = function(raw, minC, minV, eta) {
+  let below = false;
+  if (!raw) return { below };
+
+  const etaDate = new Date(eta);
+  const lines = raw.split("\n");
+  const segments = [];
+
+  // Extract segments (FM, BECMG, TEMPO, PROB)
+  lines.forEach(line => {
+    line = line.trim();
+    if (!line) return;
+
+    if (line.startsWith("TEMPO") || line.startsWith("PROB")) {
+      const probMatch = line.match(/PROB(\d{2})/);
+      const probValue = probMatch ? parseInt(probMatch[1]) : null;
+
+      const m = line.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const segStart = getDate(sDay, sHour, etaDate);
+      const segEnd = getDate(eDay, eHour, etaDate);
+      const cond = line.substring(m[0].length).trim();
+
+      // Skip PROB < 30 as per CARS
+      if (line.startsWith("PROB") && probValue < 30) return;
+
+      segments.push({ type: line.startsWith("TEMPO") ? "TEMPO" : "PROB", start: segStart, end: segEnd, cond });
+    } 
+    else if (line.startsWith("BECMG")) {
+      const m = line.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const segStart = getDate(sDay, sHour, etaDate);
+      const segEnd = getDate(eDay, eHour, etaDate);
+      const cond = line.substring(m[0].length).trim();
+      segments.push({ type: "BECMG", start: segStart, end: segEnd, cond });
+    } 
+    else if (line.startsWith("FM")) {
+      const m = line.match(/FM(\d{2})(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]), sMin = parseInt(m[3]);
+      const segStart = getDate(sDay, sHour, etaDate, sMin);
+      const cond = line.substring(m[0].length).trim();
+      segments.push({ type: "FM", start: segStart, cond });
+    }
+  });
+
+  // Evaluate TEMPO/PROB first (controlling for alternate minima)
+  for (let seg of segments.filter(s => s.type === "TEMPO" || s.type === "PROB")) {
+    if (etaDate >= seg.start && etaDate <= seg.end) {
+      const p = parseLine(seg.cond);
+      if (!(p.isGreater || p.visMiles >= minV) || p.ceiling < minC) below = true;
+    }
+  }
+
+  // Evaluate BECMG and FM (prevailing conditions)
+  if (!below) {
+    const fmOrBecmg = segments.filter(s => s.type === "FM" || s.type === "BECMG")
+      .sort((a, b) => a.start - b.start);
+    for (let seg of fmOrBecmg) {
+      if (etaDate >= seg.start && (!seg.end || etaDate <= seg.end)) {
+        const p = parseLine(seg.cond);
+        if (!(p.isGreater || p.visMiles >= minV) || p.ceiling < minC) below = true;
+      }
+    }
+  }
+
+  return { below };
+};
+
+// Helper to construct date
+function getDate(day, hour, etaDate, minute = 0) {
+  const d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
+  return d;
+}
 
 </script>
 </body>
