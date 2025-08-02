@@ -228,6 +228,16 @@ function getDate(day, hour, etaDate, minute = 0) {
   return d;
 }
 
+
+function addWeatherICAOFromTile(icao) {
+  icao = icao.trim().toUpperCase();
+  if (icao && !weatherICAOs.includes(icao)) {
+    weatherICAOs.push(icao);
+    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
+    buildWeatherTiles();
+  }
+}
+
 </script>
   <style>
     @media (min-width: 1536px) {
@@ -719,8 +729,8 @@ async function updateTile(flight, container) {
       <div class="bg-green-500 h-2 rounded" style="width:${calculateProgress(flight.std, flight.eta)}%"></div>
     </div>
     <div class="flex justify-between text-sm mt-1 font-bold">
-      <div>${flight.depicao} (STD)</div>
-      <div>${flight.arricao} (ETA)</div>
+      <div><span class='cursor-pointer text-blue-400 hover:underline' onclick=\"addWeatherICAOFromTile('${flight.depicao}')\">${flight.depicao}</span> (STD)</div>
+      <div><span class='cursor-pointer text-blue-400 hover:underline' onclick=\"addWeatherICAOFromTile('${flight.arricao}')\">${flight.arricao}</span> (ETA)</div>
     </div>
     ${showWeather ? `
     <div class="flex gap-3 items-center mt-2 text-xs">
@@ -983,6 +993,16 @@ processTAF = function(raw, minC, minV, eta) {
 function getDate(day, hour, etaDate, minute = 0) {
   const d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
   return d;
+}
+
+
+function addWeatherICAOFromTile(icao) {
+  icao = icao.trim().toUpperCase();
+  if (icao && !weatherICAOs.includes(icao)) {
+    weatherICAOs.push(icao);
+    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
+    buildWeatherTiles();
+  }
 }
 
 </script>
