@@ -235,6 +235,13 @@ function addWeatherICAOFromTile(icao) {
     weatherICAOs.push(icao);
     localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
     buildWeatherTiles();
+    // Highlight the Weather Dashboard button
+    const wxButton = document.getElementById("weatherDashboardButton");
+    if (wxButton) {
+      wxButton.classList.add("flash-highlight");
+      setTimeout(() => wxButton.classList.remove("flash-highlight"), 500);
+    }
+
   }
 }
 
@@ -250,6 +257,14 @@ function addWeatherICAOFromTile(icao) {
       }
     }
   </style>
+
+<style>
+.flash-highlight {
+  background-color: rgba(0, 255, 0, 0.4) !important;
+  transition: background-color 0.3s ease;
+}
+</style>
+
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
 
@@ -275,7 +290,7 @@ function addWeatherICAOFromTile(icao) {
 <!-- NAVIGATION -->
 <div class="flex justify-center gap-4 mb-4">
   <button onclick="showPage('flights')" class="bg-blue-600 px-4 py-2 rounded text-white hover:bg-blue-700">Flights Dashboard</button>
-  <button onclick="showPage('weather')" class="bg-teal-600 px-4 py-2 rounded text-white hover:bg-teal-700">Weather Monitor</button>
+  <button id="weatherDashboardButton"  onclick="showPage('weather')" class="bg-teal-600 px-4 py-2 rounded text-white hover:bg-teal-700">Weather Monitor</button>
 </div>
 
 <!-- GLOBAL FILTERS -->
@@ -1002,6 +1017,13 @@ function addWeatherICAOFromTile(icao) {
     weatherICAOs.push(icao);
     localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
     buildWeatherTiles();
+    // Highlight the Weather Dashboard button
+    const wxButton = document.getElementById("weatherDashboardButton");
+    if (wxButton) {
+      wxButton.classList.add("flash-highlight");
+      setTimeout(() => wxButton.classList.remove("flash-highlight"), 500);
+    }
+
   }
 }
 
