@@ -228,16 +228,6 @@ function getDate(day, hour, etaDate, minute = 0) {
   return d;
 }
 
-
-function addWeatherICAOFromTile(icao) {
-  icao = icao.trim().toUpperCase();
-  if (icao && !weatherICAOs.includes(icao)) {
-    weatherICAOs.push(icao);
-    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-    buildWeatherTiles();
-  }
-}
-
 </script>
   <style>
     @media (min-width: 1536px) {
@@ -325,14 +315,452 @@ function addWeatherICAOFromTile(icao) {
 <footer class="text-sm text-center text-gray-500 py-4 max-w-screen-2xl mx-auto">
   Live from Google Sheets | Updated <span id="lastUpdated">—</span>
 </footer>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>FlyHigh™ Dispatch</title>
-  <script src="https://cdn.tailwindcss.com">
+
+<script>
+const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRrYY4e86FUw6GFaHj1I_VI2JRmKgkLepqs2uJ4myjzRUYUz3TNpOsNSJvxZELbdwN2Pe_fTdEfNyWE/pub?gid=549523756&single=true&output=csv";
+const corsProxy = "https://corsproxy.io/?";
+const weatherCache = {};
+const TAF_CACHE_MS = 600000;
+const METAR_CACHE_MS = 60000;
+const minima = {}, flights = [], toggleAlt = {};
+let globalAlternate = false;
+let showWeather = true;
+let weatherICAOs = JSON.parse(localStorage.getItem("weatherICAOs") || "[]");
+
+// Load flights from Google Sheets
+async function loadFlights() {
+  const res = await fetch(csvUrl + "&" + Date.now());
+  const txt = await res.text();
+  const [header, ...lines] = txt.trim().split("\n");
+  const keys = header.split(",").map(k => k.trim().toLowerCase());
+  flights.length = 0;
+  lines.forEach(line => {
+    const values = line.split(",");
+    const obj = {};
+    keys.forEach((k, i) => obj[k] = values[i]?.trim());
+    flights.push({
+      callsign: obj.callsign,
+      depicao: obj.departureicao,
+      alticao: obj.alternateicao,
+      std: obj.departuretime.endsWith("Z") ? obj.departuretime : obj.departuretime + "Z",
+      sta: obj.arrivaltime.endsWith("Z") ? obj.arrivaltime : obj.arrivaltime + "Z",
+      eta: obj.eta.endsWith("Z") ? obj.eta : obj.eta + "Z",
+      arricao: obj.arrivalicao
+    });
+  });
+}
+
+async function fetchTAF(icao) {
+  if (!icao) return "";
+  const cached = weatherCache[icao]?.taf;
+  if (cached && (Date.now() - cached.time < TAF_CACHE_MS)) return cached.data;
+  const res = await fetch(`${corsProxy}https://aviationweather.gov/cgi-bin/data/taf.php?ids=${icao}&format=raw`);
+  const text = (await res.text()).trim();
+  weatherCache[icao] = weatherCache[icao] || {};
+  weatherCache[icao].taf = { data: text, time: Date.now() };
+  return text;
+}
+
+async function fetchMETAR(icao) {
+  if (!icao) return "";
+  const cached = weatherCache[icao]?.metar;
+  if (cached && (Date.now() - cached.time < METAR_CACHE_MS)) return cached.data;
+  const res = await fetch(`${corsProxy}https://aviationweather.gov/cgi-bin/data/metar.php?ids=${icao}&format=raw`);
+  const text = (await res.text()).trim();
+  weatherCache[icao] = weatherCache[icao] || {};
+  weatherCache[icao].metar = { data: text, time: Date.now() };
+  return text;
+}
+
+function shortTime(s) {
+  const d = new Date(s);
+  return d.toISOString().slice(11, 16) + "Z";
+}
+
+function calculateProgress(std, eta) {
+  const now = new Date(), start = new Date(std), end = new Date(eta);
+  if (now < start) return 0;
+  if (now > end) return 100;
+  return ((now - start) / (end - start) * 100).toFixed(1);
+}
+
+function applyGlobalMinima() {
+  const ceil = parseFloat(document.getElementById("globalCeiling").value);
+  const vis = parseFloat(document.getElementById("globalVis").value);
+  Object.keys(minima).forEach(c => minima[c] = { ceiling: ceil, vis: vis });
+  buildDashboard();
+  buildWeatherTiles();
+}
+
+function toggleWeatherView() {
+  showWeather = !showWeather;
+  document.getElementById("toggleWeatherBtn").textContent = showWeather ? "Minimize Weather" : "Show Weather";
+  buildDashboard();
+  buildWeatherTiles();
+}
+
+function parseLine(line) {
+  let ceiling = Infinity, visMiles = Infinity, isGreater = false;
+  const cloud = line.match(/(BKN|OVC|VV)(\d{3})/);
+  if (cloud) ceiling = parseInt(cloud[2]) * 100;
+  const vis = line.match(/(P?\d{1,2})SM/);
+  if (vis) {
+    if (vis[1].startsWith("P")) { 
+      visMiles = parseInt(vis[1].slice(1)); 
+      isGreater = true; 
+    } else {
+      visMiles = parseInt(vis[1]);
+    }
+  }
+  return { ceiling, visMiles, isGreater };
+}
+
+function highlightTAF(raw, minC, minV) {
+  let below = false;
+  const html = raw.split("\n").map(line => {
+    const p = parseLine(line);
+    const visOk = p.isGreater ? true : (p.visMiles >= minV);
+    const ceilOk = p.ceiling >= minC;
+    if (!(visOk && ceilOk)) below = true;
+    return `<div class="${!(visOk && ceilOk) ? "text-red-400" : ""}">${line}</div>`;
+  }).join("");
+  return { html, below };
+}
+
+function processTAF(raw, minC, minV, eta) {
+  let below = false;
+  if (!raw) return { below };
+  // parse validity period
+  let valid = raw.match(/\b\d{4}\/\d{4}\b/);
+  let startDay, startHour, endDay, endHour;
+  if (valid) {
+    startDay = parseInt(valid[0].substr(0,2));
+    startHour = parseInt(valid[0].substr(2,2));
+    endDay = parseInt(valid[0].substr(5,2));
+    endHour = parseInt(valid[0].substr(7,2));
+  }
+  const etaDate = new Date(eta);
+  // Helper to get Date for given day/hour relative to ETA's month/year
+  function getDate(day, hour, minute=0) {
+    let d = new Date(Date.UTC(etaDate.getUTCFullYear(), etaDate.getUTCMonth(), day, hour, minute));
+    // If wrapping to next month
+    if (startDay && endDay && endDay < startDay && day <= endDay) {
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+    return d;
+  }
+  let validityEnd = endDay ? getDate(endDay, endHour) : null;
+  // Split raw into segments
+  let segments = [];
+  raw.split("\n").forEach(line => {
+    line = line.trim();
+    if (!line) return;
+    // remove the header portion from first line if present
+    if (line.startsWith("TAF")) {
+      const idx = line.search(/\d{4}\/\d{4}/);
+      if (idx >= 0) {
+        line = line.substring(idx + 9).trim(); // 4+1+4 digits + space
+      }
+    }
+    // split line by FM/TEMPO/BECMG/PROB tokens if multiple in one line
+    line.split(/(?=FM\d{6})|(?=TEMPO)|(?=BECMG)|(?=PROB\d{2})/).forEach(seg => {
+      seg = seg.trim();
+      if (seg) segments.push(seg);
+    });
+  });
+  let prevSegments = [];
+  // parse segments
+  segments.forEach(seg => {
+    if (seg.startsWith("TEMPO") || seg.startsWith("PROB")) {
+      // parse timeframe
+      const m = seg.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const segStart = getDate(sDay, sHour);
+      const segEnd = getDate(eDay, eHour);
+      // conditions after timeframe
+      const condIndex = seg.indexOf(m[0]) + m[0].length;
+      const condStr = seg.substring(condIndex).trim();
+      const p = parseLine(condStr);
+      const visOk = p.isGreater ? true : (p.visMiles >= minV);
+      const ceilOk = p.ceiling >= minC;
+      if (!(visOk && ceilOk) && etaDate >= segStart && etaDate <= segEnd) {
+        below = true;
+      }
+    } else if (seg.startsWith("BECMG")) {
+      // parse gradual change timeframe
+      const m = seg.match(/(\d{2})(\d{2})\/(\d{2})(\d{2})/);
+      if (!m) return;
+      const sDay = parseInt(m[1]), sHour = parseInt(m[2]);
+      const eDay = parseInt(m[3]), eHour = parseInt(m[4]);
+      const changeStart = getDate(sDay, sHour);
+      const changeEnd = getDate(eDay, eHour);
+      // conditions after timeframe
+      const condIndex = seg.indexOf(m[0]) + m[0].length;
+      const condStr = seg.substring(condIndex).trim();
+      const p = parseLine(condStr);
+      const visOk = p.isGreater ? true : (p.visMiles >= minV);
+      const ceilOk = p.ceiling >= minC;
+      // if ETA is at or after start of change and final conditions are below minima
+      if (!(visOk && ceilOk) && etaDate >= changeStart) {
+        below = true;
+      }
+    } else {
+      // prevailing (initial or FM)
+      let start = null;
+      let condStr = seg;
+      if (seg.startsWith("FM")) {
+        const m = seg.match(/FM(\d{2})(\d{2})(\d{2})/);
+        if (m) {
+          const d = parseInt(m[1]), h = parseInt(m[2]), mi = parseInt(m[3]);
+          start = getDate(d, h, mi);
+          condStr = seg.substring(8).trim();
+        }
+      } else {
+        // initial segment
+        start = valid ? getDate(startDay, startHour) : null;
+      }
+      prevSegments.push({ start, condStr });
+    }
+  });
+  // sort prevailing segments by start time
+  prevSegments.sort((a,b) => (a.start || etaDate) - (b.start || etaDate));
+  // assign end times for prevailing segments
+  for (let i = 0; i < prevSegments.length; i++) {
+    if (i < prevSegments.length - 1) {
+      prevSegments[i].end = prevSegments[i+1].start;
+    } else {
+      prevSegments[i].end = validityEnd;
+    }
+  }
+  // find prevailing segment at ETA if not already below
+  if (!below) {
+    const seg = prevSegments.find(s => s.start && s.end && etaDate >= s.start && (!s.end || etaDate < s.end));
+    if (seg) {
+      const p = parseLine(seg.condStr);
+      const visOk = p.isGreater ? true : (p.visMiles >= minV);
+      const ceilOk = p.ceiling >= minC;
+      if (!(visOk && ceilOk)) below = true;
+    }
+  }
+  return { below };
+}
+
+function setGlobal(value) {
+  globalAlternate = value;
+  Object.keys(toggleAlt).forEach(callsign => toggleAlt[callsign] = value);
+  buildDashboard();
+  const destSpan = document.getElementById("globalDestSpan");
+  const altSpan = document.getElementById("globalAltSpan");
+  if (destSpan && altSpan) {
+    if (value) {
+      destSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium text-gray-300";
+      altSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium bg-purple-600 text-white";
+    } else {
+      destSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium bg-purple-600 text-white";
+      altSpan.className = "cursor-pointer px-2 py-1 rounded-full font-medium text-gray-300";
+    }
+  }
+}
+
+function setAlternate(callsign, value) {
+  toggleAlt[callsign] = value;
+  const flight = flights.find(f => f.callsign === callsign);
+  const tile = document.getElementById(`tile-${callsign}`);
+  if (flight && tile) {
+    updateTile(flight, tile);
+  }
+}
+
+function showPage(page) {
+  document.getElementById("flightsPage").classList.toggle("hidden", page !== "flights");
+  document.getElementById("weatherPage").classList.toggle("hidden", page !== "weather");
+}
+
+async function updateWeatherTile(icao, container) {
+  minima[icao] = minima[icao] || { ceiling: 500, vis: 1 };
+  const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
+  const taf = highlightTAF(tafRaw, minima[icao].ceiling, minima[icao].vis);
+
+  container.innerHTML = `
+    <div class="flight-title text-2xl font-bold text-center">${icao}</div>
+    ${showWeather ? `
+      <div class="flex gap-3 items-center mt-2 text-xs">
+        <label>Ceil: <input type="number" value="${minima[icao].ceiling}"
+          class="bg-gray-700 p-1 rounded w-20 text-center"
+          onchange="minima['${icao}'].ceiling=this.value; buildWeatherTiles()"/></label>
+        <label>Vis: <input type="number" step="0.1" value="${minima[icao].vis}"
+          class="bg-gray-700 p-1 rounded w-20 text-center"
+          onchange="minima['${icao}'].vis=this.value; buildWeatherTiles()"/></label>
+      </div>
+      ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
+      ${taf.html ? `<div class="mt-2 text-xs taf-block"><strong>TAF:</strong><br>${taf.html}</div>` : ""}
+    ` : ""}
+    <div class="flex justify-end mt-2">
+      <button onclick="removeWeatherICAO('${icao}')" class="bg-red-600 px-2 py-1 text-xs rounded text-white hover:bg-red-700">Remove</button>
+    </div>
+  `;
+
+  container.classList.remove("border-gray-700", "border-red-500", "border-green-500");
+  if (taf.html) {
+    container.classList.add(taf.below ? "border-red-500" : "border-green-500");
+  } else {
+    container.classList.add("border-gray-700");
+  }
+}
+
+function addWeatherICAO() {
+  const icaoInput = document.getElementById("icaoInput");
+  const icao = icaoInput.value.trim().toUpperCase();
+  if (icao && !weatherICAOs.includes(icao)) {
+    weatherICAOs.push(icao);
+    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
+    buildWeatherTiles();
+  }
+  icaoInput.value = "";
+  icaoInput.focus();
+}
+
+document.getElementById("icaoInput").addEventListener("keypress", function (e) {
+  if (e.key === "Enter") {
+    addWeatherICAO();
+  }
+});
+
+function removeWeatherICAO(icao) {
+  weatherICAOs = weatherICAOs.filter(i => i !== icao);
+  localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
+  buildWeatherTiles();
+}
+
+function buildWeatherTiles() {
+  const container = document.getElementById("weatherTiles");
+  container.innerHTML = "";
+  weatherICAOs.forEach(icao => {
+    const div = document.createElement("div");
+    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700";
+    container.appendChild(div);
+    updateWeatherTile(icao, div);
+  });
+}
+
+async function buildDashboard() {
+  const now = new Date(), completed = [], enroute = [], scheduled = [];
+  flights.forEach(f => {
+    minima[f.callsign] = minima[f.callsign] || { ceiling: 500, vis: 1 };
+    toggleAlt[f.callsign] = toggleAlt[f.callsign] !== undefined ? toggleAlt[f.callsign] : false;
+    const start = new Date(f.std), end = new Date(f.eta);
+    if (now > end) completed.push(f);
+    else if (start <= now && now <= end) enroute.push(f);
+    else if (start > now && (start - now) <= 12*3600000) scheduled.push(f);
+  });
+  completed.sort((a,b) => new Date(b.eta) - new Date(a.eta));
+  enroute.sort((a,b) => new Date(a.eta) - new Date(b.eta));
+  scheduled.sort((a,b) => new Date(a.std) - new Date(b.std));
+  const activeContainer = document.getElementById("activeFlights");
+  const completedContainer = document.getElementById("completedFlights");
+  activeContainer.innerHTML = completedContainer.innerHTML = "";
+  completed.slice(0,10).forEach(f => {
+    const div = document.createElement("div");
+    div.className = "flight-tile bg-gray-800 rounded-lg shadow p-3 border border-gray-700";
+    div.innerHTML = `<div class="text-xl font-bold text-center mb-1">${f.callsign}</div>
+      <div class="flex justify-around text-sm mb-1"><div>STD: ${shortTime(f.std)}</div>
+      <div>STA: ${shortTime(f.sta)}</div><div>ETA: ${shortTime(f.eta)}</div></div>
+      <div class="w-full bg-gray-700 rounded h-1 mt-1"><div class="bg-green-500 h-1 rounded w-full"></div></div>
+      <div class="flex justify-between text-xs mt-1 font-bold">
+      <div>${f.depicao} (STD)</div><div>${f.arricao} (ETA)</div></div>
+      <div class="text-xs mt-1 font-bold">Alternate: ${f.alticao}</div>`;
+    completedContainer.appendChild(div);
+  });
+  [...enroute, ...scheduled].forEach(f => {
+    const div = document.createElement("div");
+    div.className = "flight-tile bg-gray-800 rounded-xl shadow-md p-4 border border-gray-700 hover:scale-105 transition-transform duration-300";
+    div.id = `tile-${f.callsign}`;
+    activeContainer.appendChild(div);
+    updateTile(f, div);
+  });
+  document.getElementById("lastUpdated").textContent = new Date().toUTCString().slice(17,25);
+}
+
+async function updateTile(flight, container) {
+  const useAlt = toggleAlt[flight.callsign];
+  const icao = useAlt ? flight.alticao : flight.arricao;
+  let tafRaw = "", metarRaw = "";
+  let below = false;
+  if (icao) {
+    [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
+    if (tafRaw) {
+      const result = processTAF(tafRaw, minima[flight.callsign].ceiling, minima[flight.callsign].vis, flight.eta);
+      below = result.below;
+    }
+  }
+  const status = tafRaw
+    ? (below 
+        ? `<span class="text-red-400 font-bold">🚨 Below minima</span>`
+        : `<span class="text-green-400 font-bold">✅ Above minima</span>`)
+    : "";
+
+  container.innerHTML = `
+    <div class="flight-title text-2xl font-bold text-center">${flight.callsign}</div>
+    <div class="flex justify-between items-center text-sm mb-2">
+        <span>Weather: ${useAlt ? flight.alticao : flight.arricao}</span>
+        <div class="inline-flex bg-gray-700 rounded-full p-1">
+          <span onclick="setAlternate('${flight.callsign}', false)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${!useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Destination</span>
+          <span onclick="setAlternate('${flight.callsign}', true)" class="cursor-pointer px-2 py-1 rounded-full font-medium ${useAlt ? 'bg-purple-600 text-white' : 'text-gray-300'}">Alternate</span>
+        </div>
+      </div>
+    <div class="text-lg flex justify-around mt-2 mb-2">
+      <div>STD: ${shortTime(flight.std)}</div>
+      <div>STA: ${shortTime(flight.sta)}</div>
+      <div>ETA: ${shortTime(flight.eta)}</div>
+    </div>
+    <div class="w-full bg-gray-700 rounded h-2 mt-1">
+      <div class="bg-green-500 h-2 rounded" style="width:${calculateProgress(flight.std, flight.eta)}%"></div>
+    </div>
+    <div class="flex justify-between text-sm mt-1 font-bold">
+      <div>${flight.depicao} (STD)</div>
+      <div>${flight.arricao} (ETA)</div>
+    </div>
+    ${showWeather ? `
+    <div class="flex gap-3 items-center mt-2 text-xs">
+      <label>Ceil: <input type="number" value="${minima[flight.callsign].ceiling}"
+        class="bg-gray-700 p-1 rounded w-20 text-center"
+        onchange="minima['${flight.callsign}'].ceiling=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.parentNode.parentNode.parentNode)"/></label>
+      <label>Vis: <input type="number" step="0.1" value="${minima[flight.callsign].vis}"
+        class="bg-gray-700 p-1 rounded w-20 text-center"
+        onchange="minima['${flight.callsign}'].vis=this.value; updateTile(${JSON.stringify(flight).replace(/"/g,'&quot;')}, this.parentNode.parentNode.parentNode)"/></label>
+    </div>
+    ${metarRaw ? `<div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>` : ""}
+    ${tafRaw ? `<div class="mt-2 text-xs taf-block"><strong>TAF:</strong><br>${tafRaw.split("\n").join("<br>")}</div>` : ""}
+    <div class="mt-2 text-sm">${status}</div>
+    ` : ""}
+  `;
+
+  container.classList.remove("border-gray-700", "border-red-500", "border-green-500");
+  if (tafRaw) {
+    container.classList.add(below ? "border-red-500" : "border-green-500");
+  } else {
+    container.classList.add("border-gray-700");
+  }
+}
+
+// INIT
+loadFlights().then(() => {
+  buildDashboard();
+  buildWeatherTiles();
+});
+
+setInterval(() => {
+  loadFlights().then(buildDashboard);
+}, 60000);
+
+setInterval(() => {
+  const now = new Date();
+  document.getElementById("clock-local").textContent = now.toLocaleTimeString() + " Local";
+  document.getElementById("clock-utc").textContent = now.toUTCString().slice(17, 25) + " UTC";
+}, 1000);
+
 
 // === Flight Filters ===
 let flightFilters = [];
@@ -557,102 +985,6 @@ function getDate(day, hour, etaDate, minute = 0) {
   return d;
 }
 
-
-function addWeatherICAOFromTile(icao) {
-  icao = icao.trim().toUpperCase();
-  if (icao && !weatherICAOs.includes(icao)) {
-    weatherICAOs.push(icao);
-    localStorage.setItem("weatherICAOs", JSON.stringify(weatherICAOs));
-    buildWeatherTiles();
-  }
-}
-
 </script>
-  <style>
-    @media (min-width: 1536px) {
-      .flight-tile {
-        font-size: 0.9rem;
-        padding: 0.75rem;
-      }
-      .flight-title {
-        font-size: 1.25rem;
-      }
-    }
-  </style>
-</head>
-<body class="bg-gray-900 text-gray-200 font-sans">
-
-<header class="relative p-4 bg-gray-800 shadow-md text-center text-xl font-bold mb-6 max-w-screen-2xl mx-auto">
-  <div id="clock-local" class="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-mono text-gray-300"></div>
-  FlyHigh™ Dispatch
-  <div id="clock-utc" class="absolute right-4 top-1/2 -translate-y-1/2 text-lg font-mono text-gray-300"></div>
-
-</header>
-
-<!-- Flight Filter Panel -->
-<div id="flightFilterPanel" class="fixed top-24 right-4 bg-gray-800 p-4 rounded-lg shadow-lg w-64 border border-gray-700 z-50">
-  <h3 class="text-sm font-bold mb-2">Filter Flights</h3>
-  <div class="flex gap-2 mb-2">
-    <input id="flightFilterInput" type="text" placeholder="Enter flight #"
-      class="flex-1 bg-gray-700 p-1 rounded text-xs text-center" />
-    <button onclick="addFlightFilter()" class="bg-blue-600 px-2 py-1 rounded text-white text-xs">Add</button>
-  </div>
-  <div id="activeFlightFilters" class="flex flex-wrap gap-1"></div>
-</div>
-
-
-<!-- NAVIGATION -->
-<div class="flex justify-center gap-4 mb-4">
-  <button onclick="showPage('flights')" class="bg-blue-600 px-4 py-2 rounded text-white hover:bg-blue-700">Flights Dashboard</button>
-  <button onclick="showPage('weather')" class="bg-teal-600 px-4 py-2 rounded text-white hover:bg-teal-700">Weather Monitor</button>
-</div>
-
-<!-- GLOBAL FILTERS -->
-<div class="max-w-screen-2xl mx-auto px-6 mb-4">
-  <div class="flex flex-wrap justify-center items-center gap-4 mb-4">
-    <label>Ceiling (ft):
-      <input id="globalCeiling" type="number" class="bg-gray-700 p-1 rounded w-24 text-center" />
-    </label>
-    <label>Visibility (SM):
-      <input id="globalVis" type="number" step="0.1" class="bg-gray-700 p-1 rounded w-24 text-center" />
-    </label>
-    <button onclick="applyGlobalMinima()" class="bg-green-600 px-3 py-1 rounded text-white hover:bg-green-700 text-sm">Apply to All</button>
-    <div class="inline-flex bg-gray-700 rounded-full p-1">
-      <span id="globalDestSpan" onclick="setGlobal(false)" class="cursor-pointer px-2 py-1 rounded-full font-medium bg-purple-600 text-white">Destination</span>
-      <span id="globalAltSpan" onclick="setGlobal(true)" class="cursor-pointer px-2 py-1 rounded-full font-medium text-gray-300">Alternate</span>
-    </div>
-    <button id="toggleWeatherBtn"
-      onclick="toggleWeatherView()"
-      class="bg-yellow-600 px-3 py-1 rounded text-white hover:bg-yellow-700 text-sm">
-      Minimize Weather
-    </button>
-  </div>
-</div>
-
-<!-- FLIGHTS PAGE -->
-<div id="flightsPage" class="w-full px-6">
-  <details open>
-    <summary class="text-lg font-bold cursor-pointer mb-2">✅ Completed Flights (last 10)</summary>
-    <div id="completedFlights" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 mt-2"></div>
-  </details>
-
-  <details open>
-    <summary class="text-lg font-bold cursor-pointer mb-2 mt-6">✈️ Enroute & Scheduled Flights (12hr window)</summary>
-    <div id="activeFlights" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6"></div>
-  </details>
-</div>
-
-<!-- WEATHER PAGE -->
-<div id="weatherPage" class="w-full px-6 hidden">
-  <div class="flex justify-center gap-2 mb-4">
-    <input id="icaoInput" placeholder="Enter ICAO (e.g. CYYT)" class="bg-gray-700 p-2 rounded text-center w-40" />
-    <button onclick="addWeatherICAO()" class="bg-blue-600 px-3 py-1 rounded text-white hover:bg-blue-700">Add ICAO</button>
-  </div>
-  <div id="weatherTiles" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6"></div>
-</div>
-
-<footer class="text-sm text-center text-gray-500 py-4 max-w-screen-2xl mx-auto">
-  Live from Google Sheets | Updated <span id="lastUpdated">—</span>
-</footer>
 </body>
 </html>
