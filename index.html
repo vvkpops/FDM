@@ -88,10 +88,10 @@ updateTile = async function(flight, container) {
 };
 
 
-// === Wrap updateTile for ETA highlight using processTAF ===
-const _original_updateTile = updateTile;
+// === ETA-based TAF Highlight Patch (Non-Destructive) ===
+const _patched_updateTile = updateTile;
 updateTile = async function(flight, container) {
-  await _original_updateTile(flight, container);
+  await _patched_updateTile(flight, container);
 
   const useAlt = toggleAlt[flight.callsign];
   const icao = useAlt ? flight.alticao : flight.arricao;
@@ -101,21 +101,23 @@ updateTile = async function(flight, container) {
   const tafLines = tafRaw.split("\n");
   let etaLineIndex = -1;
 
-  tafLines.forEach((line, i) => {
-    const testRaw = tafLines.slice(0, i + 1).join("\n");
-    const result = processTAF(testRaw, min.ceiling, min.vis, flight.eta);
-    if (result.below && etaLineIndex === -1) etaLineIndex = i;
-  });
+  for (let i = 0; i < tafLines.length; i++) {
+    const partialTAF = tafLines.slice(0, i + 1).join("\n");
+    const result = processTAF(partialTAF, min.ceiling, min.vis, flight.eta);
+    if (result.below) {
+      etaLineIndex = i;
+      break;
+    }
+  }
 
   const tafContainer = container.querySelector(".mt-2.text-xs");
   if (tafContainer) {
     const tafDivs = tafContainer.querySelectorAll("div");
     tafDivs.forEach(div => {
       if (div.innerText.startsWith("TAF:")) {
-        const lines = tafLines.map((l, i) =>
-          `<div class="${i === etaLineIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
+        div.innerHTML = `<strong>TAF:</strong><br>` + tafLines.map((line, index) =>
+          `<div class="${index === etaLineIndex ? 'text-red-400 font-bold' : ''}">${line}</div>`
         ).join("");
-        div.innerHTML = `<strong>TAF:</strong><br>${lines}`;
       }
     });
   }
@@ -740,10 +742,10 @@ updateTile = async function(flight, container) {
 };
 
 
-// === Wrap updateTile for ETA highlight using processTAF ===
-const _original_updateTile = updateTile;
+// === ETA-based TAF Highlight Patch (Non-Destructive) ===
+const _patched_updateTile = updateTile;
 updateTile = async function(flight, container) {
-  await _original_updateTile(flight, container);
+  await _patched_updateTile(flight, container);
 
   const useAlt = toggleAlt[flight.callsign];
   const icao = useAlt ? flight.alticao : flight.arricao;
@@ -753,21 +755,23 @@ updateTile = async function(flight, container) {
   const tafLines = tafRaw.split("\n");
   let etaLineIndex = -1;
 
-  tafLines.forEach((line, i) => {
-    const testRaw = tafLines.slice(0, i + 1).join("\n");
-    const result = processTAF(testRaw, min.ceiling, min.vis, flight.eta);
-    if (result.below && etaLineIndex === -1) etaLineIndex = i;
-  });
+  for (let i = 0; i < tafLines.length; i++) {
+    const partialTAF = tafLines.slice(0, i + 1).join("\n");
+    const result = processTAF(partialTAF, min.ceiling, min.vis, flight.eta);
+    if (result.below) {
+      etaLineIndex = i;
+      break;
+    }
+  }
 
   const tafContainer = container.querySelector(".mt-2.text-xs");
   if (tafContainer) {
     const tafDivs = tafContainer.querySelectorAll("div");
     tafDivs.forEach(div => {
       if (div.innerText.startsWith("TAF:")) {
-        const lines = tafLines.map((l, i) =>
-          `<div class="${i === etaLineIndex ? 'text-red-400 font-bold' : ''}">${l}</div>`
+        div.innerHTML = `<strong>TAF:</strong><br>` + tafLines.map((line, index) =>
+          `<div class="${index === etaLineIndex ? 'text-red-400 font-bold' : ''}">${line}</div>`
         ).join("");
-        div.innerHTML = `<strong>TAF:</strong><br>${lines}`;
       }
     });
   }
