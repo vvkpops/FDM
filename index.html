@@ -54,24 +54,24 @@ updateTile = async function(flight, container) {
 }
 
 
-// === Dashboard ETA-based minima check with raw TAF ===
-const _original_updateTile_3 = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_3) {
+// === Safe wrapper for updateTile (adds border, toggle, raw TAF) ===
+const _original_updateTile_final = typeof updateTile === 'function' ? updateTile : null;
+if (_original_updateTile_final) {
   updateTile = async function(flight, container) {
-    // Call original updateTile to build initial UI
-    await _original_updateTile_3(flight, container);
+    // Run the original function to build UI
+    await _original_updateTile_final(flight, container);
 
-    // Ensure minima and toggle states exist
+    // Ensure minima and toggle state
     minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
     toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
 
     const useAlt = toggleAlt[flight.callsign];
     const icao = useAlt ? flight.alticao : flight.arricao;
 
-    // Fetch raw TAF and METAR
+    // Fetch weather data
     const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
 
-    // Extract ETA-based condition
+    // ETA-based minima check
     const eta = new Date(flight.eta);
     const tafLines = tafRaw.split("\n");
     let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
@@ -79,7 +79,7 @@ if (_original_updateTile_3) {
     for (const line of tafLines) {
       const p = parseLine(line);
       if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
-        etaCondition = p; // Approximate last seen condition near ETA
+        etaCondition = p;
       }
     }
 
@@ -87,16 +87,16 @@ if (_original_updateTile_3) {
     const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
     const belowMinima = !(visOk && ceilOk);
 
-    // Update border
+    // Update border only
     container.classList.add("border");
     container.classList.remove("border-red-600", "border-green-600");
     container.classList.add(belowMinima ? "border-red-600" : "border-green-600");
 
-    // Update weather label
+    // Update ICAO label
     const header = container.querySelector(".text-sm.text-center.mb-2");
     if (header) header.innerHTML = `Weather: <span class="font-bold">${icao}</span>`;
 
-    // Replace toggle section
+    // Add toggle switch UI
     const toggleArea = container.querySelector(".flex.justify-center.mt-2");
     if (toggleArea) {
       toggleArea.innerHTML = `
@@ -109,14 +109,26 @@ if (_original_updateTile_3) {
       `;
     }
 
-    // Show METAR and raw TAF without line highlights
-    const tafContainer = container.querySelector(".mt-2.text-xs");
-    if (tafContainer) {
-      tafContainer.innerHTML = `
-        <div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>
-        <div class="mt-2 text-xs"><strong>TAF:</strong><br>${tafRaw.replace(/\n/g, "<br>")}</div>
-        <div class="mt-2 text-sm">${belowMinima ? '<span class="text-red-400 font-bold">🚨 Below minima</span>' : '<span class="text-green-400 font-bold">✅ Above minima</span>'}</div>
-      `;
+    // Update TAF in dashboard to raw (no line highlight)
+    const tafSection = container.querySelector(".mt-2.text-xs");
+    if (tafSection) {
+      const tafDivs = tafSection.querySelectorAll("div");
+      tafDivs.forEach(div => {
+        if (div.innerText.startsWith("TAF:")) {
+          div.innerHTML = `<strong>TAF:</strong><br>${tafRaw.replace(/\n/g, "<br>")}`;
+        }
+      });
+
+      // Add minima status indicator
+      let status = tafSection.querySelector(".mt-2.text-sm");
+      if (!status) {
+        status = document.createElement("div");
+        status.className = "mt-2 text-sm";
+        tafSection.appendChild(status);
+      }
+      status.innerHTML = belowMinima
+        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
+        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
     }
   }
 }
@@ -527,24 +539,24 @@ updateTile = async function(flight, container) {
 }
 
 
-// === Dashboard ETA-based minima check with raw TAF ===
-const _original_updateTile_3 = typeof updateTile === 'function' ? updateTile : null;
-if (_original_updateTile_3) {
+// === Safe wrapper for updateTile (adds border, toggle, raw TAF) ===
+const _original_updateTile_final = typeof updateTile === 'function' ? updateTile : null;
+if (_original_updateTile_final) {
   updateTile = async function(flight, container) {
-    // Call original updateTile to build initial UI
-    await _original_updateTile_3(flight, container);
+    // Run the original function to build UI
+    await _original_updateTile_final(flight, container);
 
-    // Ensure minima and toggle states exist
+    // Ensure minima and toggle state
     minima[flight.callsign] = minima[flight.callsign] || { ceiling: 500, vis: 1 };
     toggleAlt[flight.callsign] = toggleAlt[flight.callsign] || false;
 
     const useAlt = toggleAlt[flight.callsign];
     const icao = useAlt ? flight.alticao : flight.arricao;
 
-    // Fetch raw TAF and METAR
+    // Fetch weather data
     const [tafRaw, metarRaw] = await Promise.all([fetchTAF(icao), fetchMETAR(icao)]);
 
-    // Extract ETA-based condition
+    // ETA-based minima check
     const eta = new Date(flight.eta);
     const tafLines = tafRaw.split("\n");
     let etaCondition = { ceiling: Infinity, visMiles: Infinity, isGreater: false };
@@ -552,7 +564,7 @@ if (_original_updateTile_3) {
     for (const line of tafLines) {
       const p = parseLine(line);
       if (!isNaN(p.ceiling) || !isNaN(p.visMiles)) {
-        etaCondition = p; // Approximate last seen condition near ETA
+        etaCondition = p;
       }
     }
 
@@ -560,16 +572,16 @@ if (_original_updateTile_3) {
     const ceilOk = etaCondition.ceiling >= minima[flight.callsign].ceiling;
     const belowMinima = !(visOk && ceilOk);
 
-    // Update border
+    // Update border only
     container.classList.add("border");
     container.classList.remove("border-red-600", "border-green-600");
     container.classList.add(belowMinima ? "border-red-600" : "border-green-600");
 
-    // Update weather label
+    // Update ICAO label
     const header = container.querySelector(".text-sm.text-center.mb-2");
     if (header) header.innerHTML = `Weather: <span class="font-bold">${icao}</span>`;
 
-    // Replace toggle section
+    // Add toggle switch UI
     const toggleArea = container.querySelector(".flex.justify-center.mt-2");
     if (toggleArea) {
       toggleArea.innerHTML = `
@@ -582,14 +594,26 @@ if (_original_updateTile_3) {
       `;
     }
 
-    // Show METAR and raw TAF without line highlights
-    const tafContainer = container.querySelector(".mt-2.text-xs");
-    if (tafContainer) {
-      tafContainer.innerHTML = `
-        <div class="mt-2 text-xs"><strong>METAR:</strong> ${metarRaw}</div>
-        <div class="mt-2 text-xs"><strong>TAF:</strong><br>${tafRaw.replace(/\n/g, "<br>")}</div>
-        <div class="mt-2 text-sm">${belowMinima ? '<span class="text-red-400 font-bold">🚨 Below minima</span>' : '<span class="text-green-400 font-bold">✅ Above minima</span>'}</div>
-      `;
+    // Update TAF in dashboard to raw (no line highlight)
+    const tafSection = container.querySelector(".mt-2.text-xs");
+    if (tafSection) {
+      const tafDivs = tafSection.querySelectorAll("div");
+      tafDivs.forEach(div => {
+        if (div.innerText.startsWith("TAF:")) {
+          div.innerHTML = `<strong>TAF:</strong><br>${tafRaw.replace(/\n/g, "<br>")}`;
+        }
+      });
+
+      // Add minima status indicator
+      let status = tafSection.querySelector(".mt-2.text-sm");
+      if (!status) {
+        status = document.createElement("div");
+        status.className = "mt-2 text-sm";
+        tafSection.appendChild(status);
+      }
+      status.innerHTML = belowMinima
+        ? '<span class="text-red-400 font-bold">🚨 Below minima</span>'
+        : '<span class="text-green-400 font-bold">✅ Above minima</span>';
     }
   }
 }
